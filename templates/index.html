@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Stoppuhr – v{{version}}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    body { background-color: #f8f9fa; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body>
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Stoppuhr</h1>
+    <div class="text-muted">v{{version}}</div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-home" type="button" role="tab">Übersicht</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-settings" type="button" role="tab">Einstellungen</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-status" type="button" role="tab">Systemstatus</button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="tab-home" role="tabpanel">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6">Startkarten</h2>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Basis-URL (IP:Port, ohne Pfad)</label>
+              <input id="baseUrl" class="form-control" placeholder="192.168.178.33:8082">
+              <div class="form-text">Wird gespeichert – geladen wird erst auf Klick.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Pfad / Dateiname</label>
+              <input id="suffix" class="form-control" placeholder="/export/CSV/Startkarten.csv">
+            </div>
+            <div class="col-md-4">
+              <button id="btnSave" class="btn btn-primary w-100">Speichern</button>
+            </div>
+            <div class="col-md-4">
+              <button id="btnReload" class="btn btn-outline-secondary w-100">Startkarten manuell laden</button>
+            </div>
+            <div class="col-md-4">
+              <button id="btnTas" class="btn btn-outline-secondary w-100">Taster aktualisieren</button>
+            </div>
+          </div>
+          <pre class="mt-3 mb-0 small mono" id="startcardsInfo">—</pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <h2 class="h6">Taster (Demo)</h2>
+          <div id="tasterList" class="small"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-settings" role="tabpanel">
+      <div class="card">
+        <div class="card-body">
+          <h2 class="h6">Hinweis</h2>
+          <p class="text-muted mb-0">
+            v0.4.1 ist eine stabile Basis zum späteren Ausbau (Startkarten-Fetch/Parsing, echte Taster-Anbindung, Lauf-/Zeitlogik).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="tab-status" role="tabpanel">
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">System / Netzwerk</h2>
+            <button id="btnStatus" class="btn btn-sm btn-outline-secondary">Aktualisieren</button>
+          </div>
+          <pre class="mt-3 mb-0 small mono" id="statusBox">—</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
