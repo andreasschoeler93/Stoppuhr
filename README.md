@@ -84,21 +84,6 @@ Optional (Anzeige):
 
 ---
 
-## ⚙️ Installation (Kurzfassung)
-
-```bash
-cd /home/dlrg/stoppuhr
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-
-
-Start:
-python app.py
-
-Oder über systemd:
-sudo systemctl restart stoppuhr
-
 
 🛣️ Roadmap & Entwicklungsstand
 ✅ Erledigt (v0.4.2 – stabile Basis)
