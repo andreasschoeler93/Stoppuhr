@@ -272,7 +272,6 @@ def api_system_status():
     hostname = socket.gethostname()
     loadavg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
 
-    cpu_percent = None
     rc, out = run_cmd(["bash", "-lc", "top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"])
     try:
         cpu_percent = float(out) if out else None
