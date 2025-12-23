@@ -1,14 +1,9 @@
-# -*- coding: utf-8 -*-
-"""
-Stoppuhr – v0.4.1 (baseline rebuild)
-- Flask Webserver auf Port 8000
-- Version-Endpoint /api/version
-- UI unter /
-- System-/Netzwerkstatus APIs
-- Startkarten-Konfiguration (Base-URL + Suffix) über /api/settings
-- Startkarten manuell laden über /api/startcards/reload (kein Auto-Refresh)
-- Tasterliste (Demo/Stub) über /api/taster-list
-"""
+# ----------------------------------------
+# Stoppuhr Webserver
+# Version: v0.4.3
+# Status: stable-beta
+# ----------------------------------------
+
 
 from __future__ import annotations
 
@@ -99,7 +94,11 @@ def index():
 
 @app.get("/api/version")
 def api_version():
-    return jsonify({"version": APP_VERSION})
+    return {
+        "version": "0.4.3",
+        "status": "stable-beta"
+    }
+
 
 
 @app.get("/api/settings")
