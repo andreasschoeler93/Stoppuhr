@@ -281,6 +281,7 @@ cython_debug/
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/Stopphuhr.iml
 .idea/vcs.xml
+.idea/Stoppuhr.iml
 
 ### Python Patch ###
 # Poetry local configuration file - https://python-poetry.org/docs/configuration/#local-configuration
