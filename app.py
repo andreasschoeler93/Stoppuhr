@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Tuple
 
 from flask import Flask, jsonify, request, render_template
 
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.4.3"
 DEFAULT_PORT = 8000
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -93,9 +93,9 @@ def index():
 
 
 @app.get("/api/version")
-def api_version():
+def api_version() -> dict[str, str]:
     return {
-        "version": "0.4.3",
+        "version": str(APP_VERSION),
         "status": "stable-beta"
     }
 
