@@ -1,14 +1,196 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<title>Stoppuhr v0.4.3</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="utf-8">
+  <title>Stoppuhr – Läufe & Taster</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <style>
+    body { background-color: #f8f9fa; }
+    .nav-tabs .nav-link.active { font-weight: 600; }
+    .taster-card { border-radius: .5rem; border: 1px solid #dee2e6; padding: .5rem .75rem; margin-bottom: .5rem; background:#fff; cursor: grab; }
+    .taster-card.dragging { opacity: .6; }
+    .taster-header { display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:.95rem; }
+    .taster-mac { font-size:.75rem; color:#6c757d; }
+    .taster-badge { display:inline-block; padding:.1rem .35rem; border-radius:999px; font-size:.75rem; background:#e9ecef; }
+    .drop-target { border: 2px dashed transparent; border-radius: .4rem; min-height: 2rem; padding: .2rem .3rem; }
+    .drop-target.drop-hover { border-color: #0d6efd; background-color: #e7f1ff; }
+    .taster-assigned { font-size: .85rem; }
+    .lane-inactive { opacity: .55; }
+  </style>
 </head>
-<body class="bg-light">
+<body>
 <div class="container py-3">
-<h1>Stoppuhr <small class="text-muted">v{{version}}</small></h1>
-<p class="text-success">v0.4.3 Basisversion läuft.</p>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 mb-0">Stoppuhr – Läufe, Bahnen & Taster</h1>
+    <div class="text-muted small">Version: <span id="appVersion">–</span></div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home" type="button" role="tab">
+        Stoppuhr
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
+        Einstellungen
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="status-tab" data-bs-toggle="tab" data-bs-target="#status" type="button" role="tab">
+        Systemstatus
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+    <!-- TAB: Stoppuhr -->
+    <div class="tab-pane fade show active" id="home" role="tabpanel">
+      <!-- Verbindung -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Verbindung zur Auswertungssoftware (Startkarten)</h2>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+              <label class="form-label">Basis-URL (IP:Port, ohne Pfad)</label>
+              <input type="text" id="baseUrlInput" class="form-control" placeholder="192.168.178.33:8082">
+              <div class="form-text">Wird in den Einstellungen gespeichert.</div>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">Startkarten-Pfad</label>
+              <input type="text" id="suffixDisplay" class="form-control" disabled>
+              <div class="form-text">Änderbar im Tab <strong>Einstellungen</strong>.</div>
+            </div>
+            <div class="col-md-2 d-grid">
+              <button class="btn btn-outline-primary" id="btnReloadStartcards">Startkarten laden</button>
+            </div>
+          </div>
+          <div class="mt-2 text-muted small" id="startcardsStatus">Status: noch nicht geladen.</div>
+        </div>
+      </div>
+
+      <!-- Lauf -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Lauf auswählen</h2>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+              <label class="form-label">Aktueller Lauf</label>
+              <select id="laufSelect" class="form-select"></select>
+            </div>
+            <div class="col-md-9 text-muted small">
+              Hinweis: Die Anzahl der Bahnen wird aus den Startkarten über die höchste Bahn-Nummer ermittelt.
+              Leere Bahnen werden als <em>inaktiv</em> angezeigt, bleiben aber per Drag & Drop zuweisbar.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bahnen + Taster -->
+      <div class="row">
+        <div class="col-lg-8 mb-3">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h6 mb-0">Bahnen</h2>
+                <div class="text-muted small">Max. Bahnen: <span id="maxLaneLabel">–</span></div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                  <thead>
+                    <tr>
+                      <th style="width:6%">Bahn</th>
+                      <th>Name</th>
+                      <th style="width:10%">Startnr</th>
+                      <th>Disziplin</th>
+                      <th style="width:22%">Taster</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bahnenTableBody"></tbody>
+                </table>
+              </div>
+              <div class="text-muted small" id="bahnenFooter"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4 mb-3">
+          <div class="card h-100">
+            <div class="card-body d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h6 mb-0">Taster (Drag & Drop)</h2>
+                <button class="btn btn-sm btn-outline-secondary" id="btnRefreshTaster">Aktualisieren</button>
+              </div>
+              <div class="text-muted small mb-2" id="tasterLastRefresh">Letzte Aktualisierung: –</div>
+              <div id="tasterList" class="flex-grow-1 overflow-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Einstellungen -->
+    <div class="tab-pane fade" id="settings" role="tabpanel">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Startkarten-Datei</h2>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label">Basis-URL (IP:Port)</label>
+              <input type="text" id="baseUrlInputSettings" class="form-control" placeholder="192.168.178.33:8082">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Pfad / Dateiname</label>
+              <input type="text" id="suffixInput" class="form-control" value="/export/CSV/Startkarten.csv">
+              <div class="form-text">Typisch: <code>/export/CSV/Startkarten.csv</code></div>
+            </div>
+            <div class="col-12 d-flex gap-2 align-items-center">
+              <button class="btn btn-primary btn-sm" id="btnSaveSettings">Speichern</button>
+              <span class="text-success small d-none" id="settingsSavedMsg">Gespeichert.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Hinweis zur Robustheit</h2>
+          <div class="text-muted small">
+            Die Startkarten werden bewusst <strong>nicht automatisch</strong> neu geladen.
+            Nur über <em>„Startkarten laden“</em> oder nach Änderung der Einstellungen.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Systemstatus -->
+    <div class="tab-pane fade" id="status" role="tabpanel">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 mb-0">Systemstatus</h2>
+        <button class="btn btn-sm btn-outline-secondary" id="btnRefreshStatus">Aktualisieren</button>
+      </div>
+      <div class="text-muted small mb-2" id="statusLastRefresh">Letzte Aktualisierung: –</div>
+
+      <div class="card">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-6"><strong>Hostname:</strong> <span id="sysHostname">–</span></div>
+            <div class="col-md-6"><strong>Uptime:</strong> <span id="sysUptime">–</span></div>
+            <div class="col-md-6"><strong>CPU:</strong> <span id="sysCpu">–</span></div>
+            <div class="col-md-6"><strong>RAM:</strong> <span id="sysMem">–</span></div>
+            <div class="col-md-6"><strong>Disk /:</strong> <span id="sysDisk">–</span></div>
+            <div class="col-md-6"><strong>Load:</strong> <span id="sysLoad">–</span></div>
+          </div>
+          <hr>
+          <div><strong>Dienst:</strong> <span id="svcStatus">–</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>

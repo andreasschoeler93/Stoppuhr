@@ -1,70 +1,70 @@
-# Stoppuhr – Raspberry‑Pi‑basierte Wettkampf‑Stoppuhr
+# Stoppuhr – v0.4.3 (Stable Beta)
 
-## Projektstatus
-Aktuelle stabile Version: **v0.4.2**
-
-Dieses Projekt stellt eine robuste, netzwerkfähige Stoppuhr für Wettkämpfe dar.
-Schwerpunkt liegt auf **Ausfallsicherheit**, **klarer Bedienung** und
-**nachträglicher Korrigierbarkeit**.
+Webbasierte Wettkampf-Stoppuhr mit ESP-Tastern und Raspberry-Pi-Backend.
 
 ---
 
-## 🛣️ Roadmap & Entwicklungsstand
+## Aktueller Stand (v0.4.3)
 
-### ✅ Erledigt (v0.4.2 – stabile Basis)
-
-- [x] Flask-Webserver lauffähig auf Raspberry Pi
-- [x] Weboberfläche mit Tabs (Stoppuhr / Einstellungen / Status)
-- [x] Startkarten-Import (CSV)
-- [x] Dynamische Ermittlung der maximalen Bahnen  
-- [x] Bahnen ohne Starter automatisch **inaktiv**
-- [x] Läufe werden über Spalte **„Lauf“** erkannt
-- [x] Kein automatischer Reload der Startkarten
-- [x] GitHub-Repository eingerichtet
-- [x] Versionierung v0.4.x
+✅ Startkarten-Import (manuell geladen)  
+✅ Dynamische Bahnanzahl (max aus CSV, Rest inaktiv)  
+✅ Drag & Drop Taster-Zuordnung (immer möglich)  
+✅ Start / Stopp / Auto-Next-Run  
+✅ GitHub-fähig & reproduzierbar  
 
 ---
 
-### 🚧 In Arbeit / Ziel v0.4.3
+## Installation (Raspberry Pi)
 
-- [ ] Übersicht aller Läufe mit Status
-- [ ] Persistenter Zustand nach Pi-Neustart
-- [ ] Vorbereitung möglich bei unvollständigen Bahnen
-- [ ] Alte Taster-Zuordnungen übernehmen
-- [ ] UI-Statusverbesserungen
+```bash
+cd /home/dlrg
+git clone https://github.com/andreasschoeler93/Stoppuhr.git stoppuhr
+cd stoppuhr
 
----
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 
-### 🧪 Geplant v0.4.4 – Backup‑Zieleinlauf
+python app.py
+```
 
-- [ ] Zweiter Zieleinlauf als Backup
-- [ ] Vergleich Bahnzeit ↔ Zieleinlauf
-- [ ] Farbige Differenzanzeige (ok / warn / kritisch)
-- [ ] Einstellbare Schwellwerte
-- [ ] Manuelle Übernahme bei Fehlern
-
----
-
-### 🧲 Geplant v0.4.5 – Historie & Nachkorrektur
-
-- [ ] Drag & Drop Zuordnung von Backup-Zeiten
-- [ ] Rücksetz- & Bestätigungsfunktion
-- [ ] Historienansicht alter Läufe
-- [ ] Nachträgliche Korrekturen
+Weboberfläche:
+```
+http://<PI-IP>:8000
+```
 
 ---
 
-### 🔐 Robustheit (Modell A)
+## Versionierung
 
-- [ ] Lokale Zeitstempel
-- [ ] Taster puffern Events
-- [ ] Kein Datenverlust bei Neustart
-- [ ] Wettkampf immer abschließbar
+- Produktive Basis: **v0.4.3**
+- Entwicklung ab jetzt **nur über GitHub**
+- Neue Features → neue Minor-Version
 
 ---
 
-## Entwicklungsprinzipien
+## Roadmap (Checklist)
 
-- Jede Version lauffähig
-- Kleine, getestete Schritte
-- Erst Robustheit, dann Komfort
+### v0.4.x
+- [x] Dynamische Bahnen
+- [x] Persistente Taster-Zuordnung
+- [ ] Backup-Zieleinlauf (Differenzanzeige)
+- [ ] Warnlogik (gelb / rot / ok)
+
+### v0.5.x
+- [ ] Lauf-Historie
+- [ ] Nachträgliche Korrektur per Drag & Drop
+- [ ] Wiederaufnahme nach Neustart
+
+### v1.0
+- [ ] Wettkampftauglich
+- [ ] Dokumentation
+- [ ] Freeze
+
+---
+
+## Philosophie
+
+**Der Pi wertet aus.  
+Die Taster messen Zeit.  
+Nichts geht verloren.**
