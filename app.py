@@ -157,7 +157,7 @@ def api_reload_startcards():
         url = base_url.rstrip("/") + suffix
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "stoppuhr/0.4.2"})
+        req = urllib.request.Request(url, headers={"User-Agent": f"stoppuhr/{APP_VERSION}"})
         with urllib.request.urlopen(req, timeout=5) as resp:
             raw = resp.read()
 
