@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Stoppuhr - Display-Simulator (Bahn 1-5 & Start)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/static/simulator.css">
+</head>
+<body>
+  <header>
+    <h1>Stoppuhr — Display-Simulator</h1>
+    <p>Anzeige-Ansichten: Bahn 1–5 und Start — Buttons simulieren Taster-Auslösungen</p>
+  </header>
+
+  <main>
+    <section id="displays" class="grid-displays">
+      <!-- Sechs Displays: Bahn1..5 + Start -->
+      <div class="device-display mode-green" data-mode="bahn" data-bahn="1"></div>
+      <div class="device-display mode-green" data-mode="bahn" data-bahn="2"></div>
+      <div class="device-display mode-green" data-mode="bahn" data-bahn="3"></div>
+      <div class="device-display mode-green" data-mode="bahn" data-bahn="4"></div>
+      <div class="device-display mode-green" data-mode="bahn" data-bahn="5"></div>
+      <div class="device-display mode-red"   data-mode="start"></div>
+    </section>
+
+    <section id="controls" class="controls">
+      <h2>Taster-Simulator (10)</h2>
+      <div id="taster-buttons" class="btn-grid"></div>
+
+      <div class="control-row">
+        <button id="toggle-run" class="action">Start / Stop (lokal)</button>
+        <button id="reset-time" class="action">Reset Zeit</button>
+      </div>
+
+      <p class="hint">Tastatur: 1..9,0 → Taster A..J. Klick auf Button sendet POST /api/triggers {taster: "A"}</p>
+    </section>
+  </main>
+
+  <footer>
+    <small>Lokaler Netzwerk-Simulator — später ersetzen echte Taster diese Buttons.</small>
+  </footer>
+
+  <script src="/static/simulator.js"></script>
+</body>
+</html>
