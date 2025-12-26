@@ -7,20 +7,20 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
+import re
 import socket
 import subprocess
 import time
 import urllib.request
-import re
-import io
-import csv
-
 from typing import Any, Dict, List, Tuple
 
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
+
 
 APP_VERSION = "0.4.3"
 DEFAULT_PORT = 8000
@@ -96,21 +96,17 @@ def index() -> str:
 
 @app.get("/api/version")
 def api_version() -> dict[str, str]:
-    return {
-        "version": str(APP_VERSION),
-        "status": "stable-beta"
-    }
-
+    return {"version": str(APP_VERSION), "status": "stable-beta"}
 
 
 @app.get("/api/settings")
-def api_get_settings() ->ResponseReturnValue:
+def api_get_settings() -> ResponseReturnValue:
     st = load_state()
     return jsonify(st.get("settings", {}))
 
 
 @app.post("/api/settings")
-def api_set_settings()->ResponseReturnValue:
+def api_set_settings() -> ResponseReturnValue:
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
     settings = st.get("settings", {})
@@ -123,7 +119,7 @@ def api_set_settings()->ResponseReturnValue:
 
 
 @app.post("/api/startcards/reload")
-def api_reload_startcards()-> tuple[ResponseReturnValue, int]:
+def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
     """
     Manuelles Nachladen der Startkarten von der Auswertungssoftware.
     - Kein Auto-Refresh (Robustheit): wird nur auf Nutzeraktion geladen.
@@ -133,7 +129,12 @@ def api_reload_startcards()-> tuple[ResponseReturnValue, int]:
     data = request.get_json(silent=True) or {}
 
     base_url = str(data.get("base_url", state["settings"].get("startcards_base_url", ""))).strip()
-    suffix = str(data.get("suffix", state["settings"].get("startcards_suffix", "/export/CSV/Startkarten.csv"))).strip()
+    suffix = str(
+        data.get(
+            "suffix",
+            state["settings"].get("startcards_suffix", "/export/CSV/Startkarten.csv"),
+        )
+    ).strip()
 
     # Settings aktualisieren, damit UI "übernimmt"
     state["settings"]["startcards_base_url"] = base_url
@@ -180,7 +181,7 @@ def api_reload_startcards()-> tuple[ResponseReturnValue, int]:
         rows = []
         for row in reader:
             # Normalize keys (strip BOM/whitespace)
-            clean = { (k or "").strip(): (v or "").strip() for k,v in row.items() }
+            clean = {(k or "").strip(): (v or "").strip() for k, v in row.items()}
             if any(clean.values()):
                 rows.append(clean)
 
@@ -209,20 +210,24 @@ def api_reload_startcards()-> tuple[ResponseReturnValue, int]:
         state["startcards"]["runs"] = runs_sorted
         save_state(state)
 
-        return jsonify({
-            "ok": True,
-            "row_count": len(rows),
-            "source_url": url,
-            "max_lane": max_lane,
-            "runs": runs_sorted,
-            "last_fetch_ts": state["startcards"]["last_fetch_ts"],
-        }), 200
+        return jsonify(
+            {
+                "ok": True,
+                "row_count": len(rows),
+                "source_url": url,
+                "max_lane": max_lane,
+                "runs": runs_sorted,
+                "last_fetch_ts": state["startcards"]["last_fetch_ts"],
+            }
+        ), 200
     except Exception as e:
         state["startcards"]["last_error"] = f"{type(e).__name__}: {e}"
         state["startcards"]["last_fetch_ts"] = int(time.time() * 1000)
         state["startcards"]["source_url"] = url
         save_state(state)
-        return jsonify({"ok": False, "error": state["startcards"]["last_error"], "source_url": url}), 500
+        return jsonify(
+            {"ok": False, "error": state["startcards"]["last_error"], "source_url": url}
+        ), 500
 
 
 @app.get("/api/startcards")
@@ -241,32 +246,36 @@ def api_taster_list():
     if not items:
         demo = []
         for i, letter in enumerate(["A", "B", "C", "D", "E"]):
-            demo.append({
-                "mac": f"AA:BB:CC:DD:EE:{i:02X}",
-                "letter": letter,
-                "role": "bahn",
-                "lane": i + 1,
-                "last_seen_ms": now_ms() - (i * 12000),
-                "last_event_type": "heartbeat",
-                "last_battery_percent": 90 - i * 5,
-                "last_rssi_dbm": -50 - i * 3,
-                "last_temp_c": 25.0 + i * 0.2,
-                "last_humidity_rel": 55.0 + i * 0.5,
-                "time_correction_ms": 0,
-                "diff_thresholds_ms": {"ok": 200, "warn": 500},
-                "start_finish_combo": False,
-            })
+            demo.append(
+                {
+                    "mac": f"AA:BB:CC:DD:EE:{i:02X}",
+                    "letter": letter,
+                    "role": "bahn",
+                    "lane": i + 1,
+                    "last_seen_ms": now_ms() - (i * 12000),
+                    "last_event_type": "heartbeat",
+                    "last_battery_percent": 90 - i * 5,
+                    "last_rssi_dbm": -50 - i * 3,
+                    "last_temp_c": 25.0 + i * 0.2,
+                    "last_humidity_rel": 55.0 + i * 0.5,
+                    "time_correction_ms": 0,
+                    "diff_thresholds_ms": {"ok": 200, "warn": 500},
+                    "start_finish_combo": False,
+                }
+            )
         items = demo
         tasters["items"] = items
         tasters["last_refresh_ts"] = now_ms()
         st["tasters"] = tasters
         save_state(st)
 
-    return jsonify({
-        "ok": True,
-        "tasters": items,
-        "last_refresh_ts": tasters.get("last_refresh_ts"),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "tasters": items,
+            "last_refresh_ts": tasters.get("last_refresh_ts"),
+        }
+    )
 
 
 @app.get("/api/system-status")
@@ -286,7 +295,9 @@ def api_system_status():
         if out:
             total, used, free = [int(x) for x in out.split()]
             mem = {
-                "total": total, "used": used, "free": free,
+                "total": total,
+                "used": used,
+                "free": free,
                 "percent": (used / total * 100.0) if total else 0.0,
             }
     except Exception:
@@ -298,36 +309,50 @@ def api_system_status():
         if out:
             total, used, free, pct = out.split()
             disk = {
-                "total": int(total), "used": int(used), "free": int(free),
-                "percent": float(pct.strip('%')),
+                "total": int(total),
+                "used": int(used),
+                "free": int(free),
+                "percent": float(pct.strip("%")),
             }
     except Exception:
         disk = None
 
-    return jsonify({
-        "hostname": hostname,
-        "load_avg": [float(loadavg[0]), float(loadavg[1]), float(loadavg[2])],
-        "cpu_percent": cpu_percent,
-        "mem": mem,
-        "disk": disk,
-        "services": {"stoppuhr": "active"},
-    })
+    return jsonify(
+        {
+            "hostname": hostname,
+            "load_avg": [float(loadavg[0]), float(loadavg[1]), float(loadavg[2])],
+            "cpu_percent": cpu_percent,
+            "mem": mem,
+            "disk": disk,
+            "services": {"stoppuhr": "active"},
+        }
+    )
 
 
 @app.get("/api/network-status")
 def api_network_status():
     rc, gw = run_cmd(["bash", "-lc", "ip route | awk '/default/ {print $3; exit}'"])
-    rc, dns = run_cmd(["bash", "-lc", "cat /etc/resolv.conf | awk '/^nameserver/ {print $2}' | xargs"])
+    rc, dns = run_cmd(
+        ["bash", "-lc", "cat /etc/resolv.conf | awk '/^nameserver/ {print $2}' | xargs"]
+    )
     dns_servers = dns.split() if dns else []
 
     interfaces: Dict[str, Any] = {}
-    rc, out = run_cmd(["bash", "-lc", "ip -o link show | awk -F': ' '{print $2}' | awk '{print $1}'"])
+    rc, out = run_cmd(
+        ["bash", "-lc", "ip -o link show | awk -F': ' '{print $2}' | awk '{print $1}'"]
+    )
     ifnames = out.split() if out else []
     for ifn in ifnames:
         rc, mac = run_cmd(["bash", "-lc", f"cat /sys/class/net/{ifn}/address 2>/dev/null || true"])
-        rc, state = run_cmd(["bash", "-lc", f"cat /sys/class/net/{ifn}/operstate 2>/dev/null || true"])
-        rc, ipv4 = run_cmd(["bash", "-lc", f"ip -4 -o addr show {ifn} | awk '{{print $4}}' | head -n1"])
-        rc, ipv6 = run_cmd(["bash", "-lc", f"ip -6 -o addr show {ifn} | awk '{{print $4}}' | head -n1"])
+        rc, state = run_cmd(
+            ["bash", "-lc", f"cat /sys/class/net/{ifn}/operstate 2>/dev/null || true"]
+        )
+        rc, ipv4 = run_cmd(
+            ["bash", "-lc", f"ip -4 -o addr show {ifn} | awk '{{print $4}}' | head -n1"]
+        )
+        rc, ipv6 = run_cmd(
+            ["bash", "-lc", f"ip -6 -o addr show {ifn} | awk '{{print $4}}' | head -n1"]
+        )
         interfaces[ifn] = {
             "mac": mac.strip() or None,
             "state": state.strip() or None,
@@ -335,11 +360,13 @@ def api_network_status():
             "ipv6": ipv6.strip() or None,
         }
 
-    return jsonify({
-        "default_gateway": gw.strip() or None,
-        "dns_servers": dns_servers,
-        "interfaces": interfaces,
-    })
+    return jsonify(
+        {
+            "default_gateway": gw.strip() or None,
+            "dns_servers": dns_servers,
+            "interfaces": interfaces,
+        }
+    )
 
 
 def main():

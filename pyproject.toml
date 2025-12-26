@@ -1,0 +1,11 @@
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+# This ensures "from __future__ import annotations" always stays at the very top
+known-first-party = ["app"]
+force-single-line = false
+lines-after-imports = 2
