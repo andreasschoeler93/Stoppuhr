@@ -1,0 +1,199 @@
+/* Simulator CSS — orientiert an dem Display-Layout aus der .ino (FreeSans look) */
+
+:root{
+  --bg: #000;
+  --text: #ffffff;
+  --vital: #9aa; /* grau/hellgrau für vitals */
+  --accent-green: #007800; /* MODE_GREEN_BG approx */
+  --accent-red:   #b41e1e; /* MODE_RED_BG approx */
+  --accent-blue:  #0050a0; /* MODE_BLUE_BG */
+  --card-radius: 8px;
+  --display-w: 240px;
+  --display-h: 280px;
+  --safe-margin: 12px;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:12px;
+  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background:#111;
+  color:var(--text);
+}
+
+header h1{margin:0}
+header p{margin:4px 0 12px 0; color:#bbb; font-size:0.95rem;}
+
+main{
+  display:grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+  align-items:start;
+}
+
+/* Displays grid */
+.grid-displays{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap:14px;
+}
+
+/* Each simulated device */
+.device-display{
+  width:var(--display-w);
+  height:var(--display-h);
+  background: #000;
+  border-radius:var(--card-radius);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+  padding:12px;
+  position:relative;
+  overflow:hidden;
+  font-family: "Free Sans", "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* Mode backgrounds (top/bottom bars emulate firmware) */
+.device-display.mode-green{ background: linear-gradient(#012, #001500); }
+.device-display.mode-red  { background: linear-gradient(#200, #2b0707); }
+.device-display.mode-blue { background: linear-gradient(#001428, #001a36); }
+
+/* top bar */
+.device-display .topbar{
+  position:absolute;
+  left:var(--safe-margin);
+  right:var(--safe-margin);
+  top:var(--safe-margin);
+  height:34px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:0 6px;
+  background: rgba(255,255,255,0.02);
+  border-radius:6px;
+}
+
+/* main time block */
+.device-display .maindisplay{
+  position:absolute;
+  left:var(--safe-margin);
+  right:var(--safe-margin);
+  top:70px; /* corresponds to mainY in firmware */
+  text-align:center;
+  color:var(--text);
+}
+
+.device-display .maindisplay .time{
+  font-weight:700;
+  font-family: "Courier New", monospace;
+  font-size:32px; /* big */
+  color: #90ff90; /* bright green like ST77XX */
+  text-shadow: 0 1px 0 rgba(0,0,0,0.8);
+}
+
+.device-display .maindisplay .name{
+  margin-top:8px;
+  font-size:14px;
+  font-weight:700;
+  color:var(--text);
+}
+
+.device-display .maindisplay .discipline{
+  margin-top:4px;
+  font-size:12px;
+  color:var(--text);
+}
+
+/* separator line and last time block */
+.device-display .separator{
+  position:absolute;
+  left:var(--safe-margin);
+  right:var(--safe-margin);
+  top:142px; /* SEPARATOR_Y */
+  height:2px;
+  background: rgba(255,255,255,0.12);
+}
+
+.device-display .lastblock{
+  position:absolute;
+  left:var(--safe-margin);
+  right:var(--safe-margin);
+  top: 142px; /* will be offset in JS */
+  text-align:center;
+  color:var(--text);
+  padding-top:6px;
+}
+
+.device-display .lastblock .label{ font-size:11px; color:var(--text); }
+.device-display .lastblock .lasttime{ font-size:18px; font-weight:700; color:var(--text); margin-top:6px; }
+.device-display .lastblock .meta{ font-size:11px; color:var(--text); margin-top:6px; }
+
+/* bottom vitals/wifi */
+.device-display .bottombar{
+  position:absolute;
+  left:var(--safe-margin);
+  right:var(--safe-margin);
+  bottom:var(--safe-margin);
+  height:40px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:var(--vital);
+  font-size:12px;
+  padding:8px;
+  background: rgba(255,255,255,0.02);
+  border-radius:6px;
+}
+
+/* wifi bars */
+.wifi {
+  display:flex;
+  gap:4px;
+  align-items:flex-end;
+  height:18px;
+}
+
+/* simulate bar */
+.wifi .bar{
+  width:6px;
+  background:#345;
+  border-radius:2px;
+  transition:all 150ms;
+}
+.wifi .bar.on{ background: #7fff7f; }
+
+/* Controls column */
+.controls{
+  padding:10px;
+  background: #0f0f10;
+  border-radius:8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+
+.btn-grid{ display:grid; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:12px; }
+.taster-btn{
+  background:#145ea8;
+  color:#fff;
+  border:none;
+  padding:10px;
+  border-radius:6px;
+  font-weight:700;
+  cursor:pointer;
+}
+.taster-btn:active{ transform:translateY(1px) }
+
+.control-row{ display:flex; gap:8px; margin-top:8px; }
+.action{
+  padding:10px;
+  background:#444;
+  color:#fff;
+  border-radius:6px;
+  border:none;
+  cursor:pointer;
+}
+.hint{ color:#9aa; font-size:0.9rem; margin-top:8px; }
+
+/* responsive */
+@media (max-width:1100px){
+  main{ grid-template-columns: 1fr; }
+  .grid-displays{ grid-template-columns: repeat(2, minmax(180px,1fr)); }
+  .device-display{ width:100%; height:260px; }
+}
