@@ -16,9 +16,11 @@ import urllib.request
 import re
 import io
 import csv
+
 from typing import Any, Dict, List, Tuple
 
 from flask import Flask, jsonify, request, render_template
+from flask.typing import ResponseReturnValue
 
 APP_VERSION = "0.4.3"
 DEFAULT_PORT = 8000
@@ -88,7 +90,7 @@ def run_cmd(cmd: List[str]) -> Tuple[int, str]:
 
 
 @app.get("/")
-def index():
+def index() -> str:
     return render_template("index.html", version=APP_VERSION)
 
 
@@ -102,13 +104,13 @@ def api_version() -> dict[str, str]:
 
 
 @app.get("/api/settings")
-def api_get_settings():
+def api_get_settings() ->ResponseReturnValue:
     st = load_state()
     return jsonify(st.get("settings", {}))
 
 
 @app.post("/api/settings")
-def api_set_settings():
+def api_set_settings()->ResponseReturnValue:
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
     settings = st.get("settings", {})
@@ -121,7 +123,7 @@ def api_set_settings():
 
 
 @app.post("/api/startcards/reload")
-def api_reload_startcards():
+def api_reload_startcards()-> tuple[ResponseReturnValue, int]:
     """
     Manuelles Nachladen der Startkarten von der Auswertungssoftware.
     - Kein Auto-Refresh (Robustheit): wird nur auf Nutzeraktion geladen.
@@ -214,7 +216,7 @@ def api_reload_startcards():
             "max_lane": max_lane,
             "runs": runs_sorted,
             "last_fetch_ts": state["startcards"]["last_fetch_ts"],
-        })
+        }), 200
     except Exception as e:
         state["startcards"]["last_error"] = f"{type(e).__name__}: {e}"
         state["startcards"]["last_fetch_ts"] = int(time.time() * 1000)
