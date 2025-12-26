@@ -118,6 +118,101 @@ def api_set_settings() -> ResponseReturnValue:
     save_state(st)
     return jsonify({"ok": True, "settings": settings})
 
+# --- BEGIN: Taster/Trigger & Data API Ergänzungen ---
+def _ensure_keys(st: dict):
+    if "runs" not in st:
+        st["runs"] = {"current_run": None, "runs": []}
+    if "assignments" not in st:
+        st["assignments"] = {"mapping": {}, "last_update_ts": None}
+    if "vitals" not in st:
+        st["vitals"] = []
+    if "triggers" not in st:
+        st["triggers"] = []
+
+@app.get("/api/runs")
+def api_get_runs():
+    st = load_state()
+    _ensure_keys(st)
+    return jsonify(st["runs"])
+
+@app.post("/api/runs")
+def api_post_runs():
+    st = load_state()
+    _ensure_keys(st)
+    payload = request.get_json(force=True, silent=True) or {}
+    if "current_run" in payload:
+        st["runs"]["current_run"] = payload["current_run"]
+    if "run" in payload:
+        st["runs"]["runs"].append(payload["run"])
+    save_state(st)
+    return jsonify({"ok": True, "runs": st["runs"]})
+
+@app.get("/api/assignments")
+def api_get_assignments():
+    st = load_state()
+    _ensure_keys(st)
+    return jsonify(st["assignments"])
+
+@app.post("/api/assignments")
+def api_post_assignments():
+    st = load_state()
+    _ensure_keys(st)
+    payload = request.get_json(force=True, silent=True) or {}
+    if "mapping" in payload:
+        st["assignments"]["mapping"] = payload["mapping"]
+        st["assignments"]["last_update_ts"] = now_ms()
+        save_state(st)
+    return jsonify({"ok": True, "assignments": st["assignments"]})
+
+@app.get("/api/vitals")
+def api_get_vitals():
+    st = load_state()
+    _ensure_keys(st)
+    return jsonify(st["vitals"])
+
+@app.post("/api/vitals")
+def api_post_vitals():
+    st = load_state()
+    _ensure_keys(st)
+    payload = request.get_json(force=True, silent=True) or {}
+    entry = {}
+    for k in ("taster","battery","temp","humidity"):
+        if k in payload:
+            entry[k] = payload[k]
+    entry["ts"] = int(payload.get("ts", now_ms()))
+    st["vitals"].append(entry)
+    save_state(st)
+    return jsonify({"ok": True, "vital": entry})
+
+@app.get("/api/triggers")
+def api_get_triggers():
+    st = load_state()
+    _ensure_keys(st)
+    return jsonify(st["triggers"])
+
+@app.post("/api/triggers")
+def api_post_triggers():
+    st = load_state()
+    _ensure_keys(st)
+    payload = request.get_json(force=True, silent=True) or {}
+    taster = payload.get("taster")
+    if not taster:
+        return jsonify({"ok": False, "error": "missing taster"}), 400
+    entry = {
+        "taster": str(taster),
+        "ts": int(payload.get("ts", now_ms())),
+        "stopwatch_ms": payload.get("stopwatch_ms"),
+        "run_id": payload.get("run_id")
+    }
+    st["triggers"].append(entry)
+    # backward compatibility: keep tasters.items
+    if "tasters" not in st:
+        st["tasters"] = {"items": [], "last_refresh_ts": None}
+    st["tasters"]["items"].append({"taster": entry["taster"], "ts": entry["ts"]})
+    save_state(st)
+    return jsonify({"ok": True, "trigger": entry})
+# --- END ---
+
 
 @app.post("/api/startcards/reload")
 def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
