@@ -24,6 +24,7 @@ from flask.typing import ResponseReturnValue
 
 APP_VERSION = "0.4.3"
 DEFAULT_PORT = 8000
+EXIT_ERROR = 1
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -86,7 +87,7 @@ def run_cmd(cmd: List[str]) -> Tuple[int, str]:
         out = (p.stdout or "") + (p.stderr or "")
         return p.returncode, out.strip()
     except Exception as e:
-        return 1, str(e)
+        return EXIT_ERROR, str(e)
 
 
 @app.get("/")
@@ -283,14 +284,14 @@ def api_system_status():
     hostname = socket.gethostname()
     loadavg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
 
-    rc, out = run_cmd(["bash", "-lc", "top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"])
+    _, out = run_cmd(["bash", "-lc", "top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"])
     try:
         cpu_percent = float(out) if out else None
     except Exception:
         cpu_percent = None
 
     mem = None
-    rc, out = run_cmd(["bash", "-lc", "free -b | awk '/Mem:/ {print $2,$3,$4}'"])
+    _, out = run_cmd(["bash", "-lc", "free -b | awk '/Mem:/ {print $2,$3,$4}'"])
     try:
         if out:
             total, used, free = [int(x) for x in out.split()]
@@ -304,7 +305,7 @@ def api_system_status():
         mem = None
 
     disk = None
-    rc, out = run_cmd(["bash", "-lc", "df -B1 / | awk 'NR==2 {print $2,$3,$4,$5}'"])
+    _, out = run_cmd(["bash", "-lc", "df -B1 / | awk 'NR==2 {print $2,$3,$4,$5}'"])
     try:
         if out:
             total, used, free, pct = out.split()
@@ -331,26 +332,26 @@ def api_system_status():
 
 @app.get("/api/network-status")
 def api_network_status():
-    rc, gw = run_cmd(["bash", "-lc", "ip route | awk '/default/ {print $3; exit}'"])
-    rc, dns = run_cmd(
+    _, gw = run_cmd(["bash", "-lc", "ip route | awk '/default/ {print $3; exit}'"])
+    _, dns = run_cmd(
         ["bash", "-lc", "cat /etc/resolv.conf | awk '/^nameserver/ {print $2}' | xargs"]
     )
     dns_servers = dns.split() if dns else []
 
     interfaces: Dict[str, Any] = {}
-    rc, out = run_cmd(
+    _, out = run_cmd(
         ["bash", "-lc", "ip -o link show | awk -F': ' '{print $2}' | awk '{print $1}'"]
     )
     ifnames = out.split() if out else []
     for ifn in ifnames:
-        rc, mac = run_cmd(["bash", "-lc", f"cat /sys/class/net/{ifn}/address 2>/dev/null || true"])
-        rc, state = run_cmd(
+        _, mac = run_cmd(["bash", "-lc", f"cat /sys/class/net/{ifn}/address 2>/dev/null || true"])
+        _, state = run_cmd(
             ["bash", "-lc", f"cat /sys/class/net/{ifn}/operstate 2>/dev/null || true"]
         )
-        rc, ipv4 = run_cmd(
+        _, ipv4 = run_cmd(
             ["bash", "-lc", f"ip -4 -o addr show {ifn} | awk '{{print $4}}' | head -n1"]
         )
-        rc, ipv6 = run_cmd(
+        _, ipv6 = run_cmd(
             ["bash", "-lc", f"ip -6 -o addr show {ifn} | awk '{{print $4}}' | head -n1"]
         )
         interfaces[ifn] = {
