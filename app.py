@@ -32,7 +32,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
 
-def _default_state() -> Dict[str, Any]:
+def _default_state() -> Dict[str, dict[str, Any]]:
     return {
         "settings": {
             "startcards_base_url": "",
@@ -53,7 +53,7 @@ def _default_state() -> Dict[str, Any]:
     }
 
 
-def load_state() -> Dict[str, Any]:
+def load_state() -> Dict[str, dict[str, Any]]:
     if not os.path.exists(STATE_PATH):
         st = _default_state()
         save_state(st)
@@ -67,7 +67,7 @@ def load_state() -> Dict[str, Any]:
         return st
 
 
-def save_state(state: Dict[str, Any]) -> None:
+def save_state(state: Dict[str, dict[str, Any]]) -> None:
     tmp = STATE_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
