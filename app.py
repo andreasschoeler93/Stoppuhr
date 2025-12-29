@@ -118,6 +118,7 @@ def api_set_settings() -> ResponseReturnValue:
     save_state(st)
     return jsonify({"ok": True, "settings": settings})
 
+
 # --- BEGIN: Taster/Trigger & Data API Ergänzungen ---
 def _ensure_keys(st: dict):
     if "runs" not in st:
@@ -129,11 +130,13 @@ def _ensure_keys(st: dict):
     if "triggers" not in st:
         st["triggers"] = []
 
+
 @app.get("/api/runs")
 def api_get_runs():
     st = load_state()
     _ensure_keys(st)
     return jsonify(st["runs"])
+
 
 @app.post("/api/runs")
 def api_post_runs():
@@ -147,11 +150,13 @@ def api_post_runs():
     save_state(st)
     return jsonify({"ok": True, "runs": st["runs"]})
 
+
 @app.get("/api/assignments")
 def api_get_assignments():
     st = load_state()
     _ensure_keys(st)
     return jsonify(st["assignments"])
+
 
 @app.post("/api/assignments")
 def api_post_assignments():
@@ -164,11 +169,13 @@ def api_post_assignments():
         save_state(st)
     return jsonify({"ok": True, "assignments": st["assignments"]})
 
+
 @app.get("/api/vitals")
 def api_get_vitals():
     st = load_state()
     _ensure_keys(st)
     return jsonify(st["vitals"])
+
 
 @app.post("/api/vitals")
 def api_post_vitals():
@@ -176,7 +183,7 @@ def api_post_vitals():
     _ensure_keys(st)
     payload = request.get_json(force=True, silent=True) or {}
     entry = {}
-    for k in ("taster","battery","temp","humidity"):
+    for k in ("taster", "battery", "temp", "humidity"):
         if k in payload:
             entry[k] = payload[k]
     entry["ts"] = int(payload.get("ts", now_ms()))
@@ -184,11 +191,13 @@ def api_post_vitals():
     save_state(st)
     return jsonify({"ok": True, "vital": entry})
 
+
 @app.get("/api/triggers")
 def api_get_triggers():
     st = load_state()
     _ensure_keys(st)
     return jsonify(st["triggers"])
+
 
 @app.post("/api/triggers")
 def api_post_triggers():
@@ -202,7 +211,7 @@ def api_post_triggers():
         "taster": str(taster),
         "ts": int(payload.get("ts", now_ms())),
         "stopwatch_ms": payload.get("stopwatch_ms"),
-        "run_id": payload.get("run_id")
+        "run_id": payload.get("run_id"),
     }
     st["triggers"].append(entry)
     # backward compatibility: keep tasters.items
@@ -211,6 +220,8 @@ def api_post_triggers():
     st["tasters"]["items"].append({"taster": entry["taster"], "ts": entry["ts"]})
     save_state(st)
     return jsonify({"ok": True, "trigger": entry})
+
+
 # --- END ---
 
 
