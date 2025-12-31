@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - app-net
+
+  redis:
+    image: redis:8.4
+    command: redis-server --save 60 1 --loglevel warning  # Optional: persistence every 60s if changed
+    volumes:
+      - redis-data:/data  # Optional: persistent Redis storage
+    networks:
+      - app-net
+
+volumes:
+  redis-data:  # Named volume for Redis persistence (remove if not needed)
+
+networks:
+  app-net:
+    driver: bridge
