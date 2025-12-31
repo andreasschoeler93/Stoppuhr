@@ -16,7 +16,7 @@ import socket
 import subprocess
 import time
 import urllib.request
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
 from flask import Flask, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
@@ -35,7 +35,32 @@ os.makedirs(DATA_DIR, exist_ok=True)
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
 
-def _default_state() -> Dict[str, dict[str, Any]]:
+class Vital(TypedDict):
+    taster: str
+    battery: float
+    temp: float
+    humidity: float
+    ts: int
+
+
+class Trigger(TypedDict):
+    taster: str
+    ts: int
+    stopwatch_ms: Optional[int]
+    run_id: Optional[str]
+
+
+class State(TypedDict):
+    settings: dict[str, str]
+    startcards: dict[str, Any]
+    tasters: dict[str, Any]
+    vitals: list[dict[str, Any]]  # list[Vital]
+    triggers: list[Trigger]
+    runs: dict[str, Any]
+    assignments: dict[str, Any]
+
+
+def _default_state() -> State:
     return {
         "settings": {
             "startcards_base_url": "",
@@ -53,10 +78,14 @@ def _default_state() -> Dict[str, dict[str, Any]]:
             "items": [],
             "last_refresh_ts": None,
         },
+        "runs": {"current_run": None, "runs": []},
+        "assignments": {"mapping": {}, "last_update_ts": None},
+        "vitals": [],
+        "triggers": [],
     }
 
 
-def load_state() -> Dict[str, dict[str, Any]]:
+def load_state() -> State:
     if not os.path.exists(STATE_PATH):
         st = _default_state()
         save_state(st)
@@ -70,7 +99,7 @@ def load_state() -> Dict[str, dict[str, Any]]:
         return st
 
 
-def save_state(state: Dict[str, dict[str, Any]]) -> None:
+def save_state(state: State) -> None:
     tmp = STATE_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
@@ -119,29 +148,15 @@ def api_set_settings() -> ResponseReturnValue:
     return jsonify({"ok": True, "settings": settings})
 
 
-# --- BEGIN: Taster/Trigger & Data API Ergänzungen ---
-def _ensure_keys(st: dict):
-    if "runs" not in st:
-        st["runs"] = {"current_run": None, "runs": []}
-    if "assignments" not in st:
-        st["assignments"] = {"mapping": {}, "last_update_ts": None}
-    if "vitals" not in st:
-        st["vitals"] = []
-    if "triggers" not in st:
-        st["triggers"] = []
-
-
 @app.get("/api/runs")
 def api_get_runs():
     st = load_state()
-    _ensure_keys(st)
     return jsonify(st["runs"])
 
 
 @app.post("/api/runs")
 def api_post_runs():
     st = load_state()
-    _ensure_keys(st)
     payload = request.get_json(force=True, silent=True) or {}
     if "current_run" in payload:
         st["runs"]["current_run"] = payload["current_run"]
@@ -154,14 +169,12 @@ def api_post_runs():
 @app.get("/api/assignments")
 def api_get_assignments():
     st = load_state()
-    _ensure_keys(st)
     return jsonify(st["assignments"])
 
 
 @app.post("/api/assignments")
 def api_post_assignments():
     st = load_state()
-    _ensure_keys(st)
     payload = request.get_json(force=True, silent=True) or {}
     if "mapping" in payload:
         st["assignments"]["mapping"] = payload["mapping"]
@@ -173,14 +186,12 @@ def api_post_assignments():
 @app.get("/api/vitals")
 def api_get_vitals():
     st = load_state()
-    _ensure_keys(st)
     return jsonify(st["vitals"])
 
 
 @app.post("/api/vitals")
 def api_post_vitals():
     st = load_state()
-    _ensure_keys(st)
     payload = request.get_json(force=True, silent=True) or {}
     entry = {}
     for k in ("taster", "battery", "temp", "humidity"):
@@ -195,19 +206,17 @@ def api_post_vitals():
 @app.get("/api/triggers")
 def api_get_triggers():
     st = load_state()
-    _ensure_keys(st)
     return jsonify(st["triggers"])
 
 
 @app.post("/api/triggers")
 def api_post_triggers():
     st = load_state()
-    _ensure_keys(st)
     payload = request.get_json(force=True, silent=True) or {}
     taster = payload.get("taster")
     if not taster:
         return jsonify({"ok": False, "error": "missing taster"}), 400
-    entry = {
+    entry: Trigger = {
         "taster": str(taster),
         "ts": int(payload.get("ts", now_ms())),
         "stopwatch_ms": payload.get("stopwatch_ms"),
