@@ -14,17 +14,17 @@ import socket
 import subprocess
 import time
 import urllib.request
-from typing import Any, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Dict, Final, List, Optional, Tuple, TypedDict
 
 import redis
 from flask import Flask, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
 
 
-APP_VERSION = "0.4.3"
-DEFAULT_PORT = 8000
-EXIT_ERROR = 1
-STATE_KEY = "STATE"
+APP_VERSION: Final[str] = "0.4.3"
+DEFAULT_PORT: Final[int] = 8000
+EXIT_ERROR: Final[int] = 1
+STATE_KEY: Final[str] = "STATE"
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
