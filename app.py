@@ -18,6 +18,7 @@ import time
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 
+import redis
 from flask import Flask, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
 
@@ -25,14 +26,11 @@ from flask.typing import ResponseReturnValue
 APP_VERSION = "0.4.3"
 DEFAULT_PORT = 8000
 EXIT_ERROR = 1
+STATE_KEY = "STATE"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-STATE_PATH = os.path.join(DATA_DIR, "state.json")
-
-os.makedirs(DATA_DIR, exist_ok=True)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+redis_store = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
 
 
 class Vital(TypedDict):
@@ -86,24 +84,17 @@ def _default_state() -> State:
 
 
 def load_state() -> State:
-    if not os.path.exists(STATE_PATH):
-        st = _default_state()
-        save_state(st)
-        return st
-    try:
-        with open(STATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        st = _default_state()
-        save_state(st)
-        return st
+    state = redis_store.get(STATE_KEY)
+    if state is None:
+        state = _default_state()
+        save_state(state)
+    else:
+        state = json.loads(state)
+    return state
 
 
 def save_state(state: State) -> None:
-    tmp = STATE_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, STATE_PATH)
+    redis_store.set(STATE_KEY, json.dumps(state))
 
 
 def now_ms() -> int:
