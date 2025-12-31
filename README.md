@@ -21,11 +21,8 @@ cd /home/dlrg
 git clone https://github.com/andreasschoeler93/Stoppuhr.git stoppuhr
 cd stoppuhr
 
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-python app.py
+# Start application via Docker Compose
+docker compose up --build -d
 ```
 
 Weboberfläche:
