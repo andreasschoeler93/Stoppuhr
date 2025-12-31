@@ -16,6 +16,7 @@ import time
 import urllib.request
 from typing import Any, Dict, Final, List, Optional, Tuple, TypedDict
 
+import psutil
 import redis
 from flask import Flask, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
@@ -388,39 +389,23 @@ def api_system_status():
     hostname = socket.gethostname()
     loadavg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
 
-    _, out = run_cmd(["bash", "-lc", "top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"])
-    try:
-        cpu_percent = float(out) if out else None
-    except Exception:
-        cpu_percent = None
+    cpu_percent = psutil.cpu_percent(interval=None)
 
-    mem = None
-    _, out = run_cmd(["bash", "-lc", "free -b | awk '/Mem:/ {print $2,$3,$4}'"])
-    try:
-        if out:
-            total, used, free = [int(x) for x in out.split()]
-            mem = {
-                "total": total,
-                "used": used,
-                "free": free,
-                "percent": (used / total * 100.0) if total else 0.0,
-            }
-    except Exception:
-        mem = None
+    virtual_mem = psutil.virtual_memory()
+    mem = {
+        "total": virtual_mem.total,
+        "used": virtual_mem.used,
+        "free": virtual_mem.available,  # 'available' is usually better than 'free' on Linux
+        "percent": virtual_mem.percent,
+    }
 
-    disk = None
-    _, out = run_cmd(["bash", "-lc", "df -B1 / | awk 'NR==2 {print $2,$3,$4,$5}'"])
-    try:
-        if out:
-            total, used, free, pct = out.split()
-            disk = {
-                "total": int(total),
-                "used": int(used),
-                "free": int(free),
-                "percent": float(pct.strip("%")),
-            }
-    except Exception:
-        disk = None
+    disk_usage = psutil.disk_usage("/")
+    disk = {
+        "total": disk_usage.total,
+        "used": disk_usage.used,
+        "free": disk_usage.free,
+        "percent": disk_usage.percent,
+    }
 
     return jsonify(
         {
