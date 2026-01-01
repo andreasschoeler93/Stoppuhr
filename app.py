@@ -11,10 +11,10 @@ import json
 import os
 import re
 import socket
-import subprocess
+import struct
 import time
 import urllib.request
-from typing import Any, Dict, Final, List, Optional, Tuple, TypedDict
+from typing import Any, Final, Optional, TypedDict
 
 import psutil
 import redis
@@ -98,15 +98,6 @@ def save_state(state: State) -> None:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
-
-
-def run_cmd(cmd: List[str]) -> Tuple[int, str]:
-    try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
-        out = (p.stdout or "") + (p.stderr or "")
-        return p.returncode, out.strip()
-    except Exception as e:
-        return EXIT_ERROR, str(e)
 
 
 @app.get("/")
@@ -421,38 +412,67 @@ def api_system_status():
 
 @app.get("/api/network-status")
 def api_network_status():
-    _, gw = run_cmd(["bash", "-lc", "ip route | awk '/default/ {print $3; exit}'"])
-    _, dns = run_cmd(
-        ["bash", "-lc", "cat /etc/resolv.conf | awk '/^nameserver/ {print $2}' | xargs"]
-    )
-    dns_servers = dns.split() if dns else []
+    # Get default gateway
+    default_gateway = None
+    try:
+        with open("/proc/net/route") as fh:
+            for line in fh:
+                fields = line.strip().split()
+                if len(fields) > 3 and fields[1] == "00000000" and int(fields[3], 16) & 2:
+                    default_gateway = socket.inet_ntoa(struct.pack("<L", int(fields[2], 16)))
+                    break
+    except Exception:
+        pass
 
-    interfaces: Dict[str, Any] = {}
-    _, out = run_cmd(
-        ["bash", "-lc", "ip -o link show | awk -F': ' '{print $2}' | awk '{print $1}'"]
-    )
-    ifnames = out.split() if out else []
-    for ifn in ifnames:
-        _, mac = run_cmd(["bash", "-lc", f"cat /sys/class/net/{ifn}/address 2>/dev/null || true"])
-        _, state = run_cmd(
-            ["bash", "-lc", f"cat /sys/class/net/{ifn}/operstate 2>/dev/null || true"]
-        )
-        _, ipv4 = run_cmd(
-            ["bash", "-lc", f"ip -4 -o addr show {ifn} | awk '{{print $4}}' | head -n1"]
-        )
-        _, ipv6 = run_cmd(
-            ["bash", "-lc", f"ip -6 -o addr show {ifn} | awk '{{print $4}}' | head -n1"]
-        )
+    # Get DNS servers
+    dns_servers = []
+    try:
+        with open("/etc/resolv.conf") as f:
+            for line in f:
+                if line.startswith("nameserver"):
+                    parts = line.split()
+                    if len(parts) > 1:
+                        dns_servers.append(parts[1])
+    except Exception:
+        pass
+
+    # Get interfaces
+    interfaces = {}
+    net_addrs = psutil.net_if_addrs()
+    net_stats = psutil.net_if_stats()
+    for ifn in net_addrs:
+        addrs = net_addrs[ifn]
+        stats = net_stats.get(ifn)
+        mac = None
+        ipv4 = None
+        ipv6 = None
+        state = None
+        if stats:
+            state = "up" if stats.isup else "down"
+        for addr in addrs:
+            if addr.family == psutil.AF_LINK:
+                mac = addr.address
+            elif addr.family == socket.AF_INET and not ipv4:
+                if addr.netmask:
+                    mask_bits = bin(int.from_bytes(socket.inet_aton(addr.netmask), "big")).count(
+                        "1"
+                    )
+                    ipv4 = f"{addr.address}/{mask_bits}"
+            elif addr.family == socket.AF_INET6 and not ipv6:
+                if addr.netmask:
+                    mask_bytes = socket.inet_pton(socket.AF_INET6, addr.netmask)
+                    mask_bits = int.from_bytes(mask_bytes, "big").bit_count()
+                    ipv6 = f"{addr.address}/{mask_bits}"
         interfaces[ifn] = {
-            "mac": mac.strip() or None,
-            "state": state.strip() or None,
-            "ipv4": ipv4.strip() or None,
-            "ipv6": ipv6.strip() or None,
+            "mac": mac,
+            "state": state,
+            "ipv4": ipv4,
+            "ipv6": ipv6,
         }
 
     return jsonify(
         {
-            "default_gateway": gw.strip() or None,
+            "default_gateway": default_gateway,
             "dns_servers": dns_servers,
             "interfaces": interfaces,
         }
