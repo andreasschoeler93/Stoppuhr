@@ -5,13 +5,24 @@ import {CommonModule} from '@angular/common';
 import {MatCardModule} from '@angular/material/card';
 import {MatTableDataSource, MatTableModule} from '@angular/material/table';
 import {FormsModule} from '@angular/forms';
-import {MatFormField, MatLabel} from '@angular/material/input';
-import {MatOption, MatSelect} from '@angular/material/select'; // For dataSource
+import {MatInputModule} from '@angular/material/input';
+import {MatFormFieldModule} from '@angular/material/form-field';
+import {MatButtonModule} from '@angular/material/button';
+import {MatSelectModule} from '@angular/material/select';
 
 @Component({
   selector: 'app-stoppuhr',
   standalone: true,
-  imports: [CommonModule, DragDropModule, MatCardModule, MatTableModule, FormsModule, MatFormField, MatLabel, MatSelect, MatOption],
+  imports: [CommonModule,
+    FormsModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatButtonModule,
+    MatSelectModule,
+    MatTableModule,
+    DragDropModule,
+    ],
   templateUrl: './stoppuhr.component.html',
   styleUrls: ['./stoppuhr.component.scss'],
 })
