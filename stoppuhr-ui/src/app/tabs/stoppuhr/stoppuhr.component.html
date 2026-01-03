@@ -1,0 +1,148 @@
+<div class="content">
+  <!-- Card 1 -->
+  <mat-card>
+    <mat-card-title>Verbindung zur Auswertungssoftware (Startkarten)</mat-card-title>
+
+    <mat-card-content>
+      <div class="grid-2">
+        <div>
+          <mat-form-field appearance="outline" class="w-100">
+            <mat-label>Basis-URL (IP:Port, ohne Pfad)</mat-label>
+            <input matInput [(ngModel)]="baseUrl" />
+          </mat-form-field>
+
+          <div class="help">Wird in den Einstellungen gespeichert.</div>
+          <div class="help muted">{{ statusText }}</div>
+        </div>
+
+        <div>
+          <mat-form-field appearance="outline" class="w-100">
+            <mat-label>Startkarten-Pfad</mat-label>
+            <input matInput [value]="startkartenPfad" disabled />
+          </mat-form-field>
+
+          <div class="help">Änderbar im Tab <b>Einstellungen</b>.</div>
+
+          <div class="actions-right">
+            <button mat-stroked-button color="primary" (click)="loadStartkarten()">
+              Startkarten laden
+            </button>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Card 2 -->
+  <mat-card>
+    <mat-card-title>Lauf auswählen</mat-card-title>
+
+    <mat-card-content>
+      <div class="grid-2">
+        <div>
+          <mat-form-field appearance="outline" class="w-100">
+            <mat-label>Aktueller Lauf</mat-label>
+            <mat-select [(ngModel)]="selectedLauf">
+              <mat-option *ngFor="let opt of laufOptions" [value]="opt.value">
+                {{ opt.label }}
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+        </div>
+
+        <div class="hint">
+          Hinweis: Die Anzahl der Bahnen wird aus den Startkarten über die höchste Bahn-Nummer ermittelt.
+          Leere Bahnen werden als <i>inaktiv</i> angezeigt, bleiben aber per Drag &amp; Drop zuweisbar.
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Bottom row -->
+  <div class="bottom-row">
+    <!-- Bahnen -->
+    <mat-card class="grow">
+      <div class="card-head">
+        <mat-card-title>Bahnen</mat-card-title>
+        <div class="meta">{{ maxBahnenText }}</div>
+      </div>
+
+      <mat-card-content>
+        <table mat-table [dataSource]="dataSource" class="mat-elevation-z0 w-100">
+          <ng-container matColumnDef="bahn">
+            <th mat-header-cell *matHeaderCellDef>Bahn</th>
+            <td mat-cell *matCellDef="let row">{{ row.bahn }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="name">
+            <th mat-header-cell *matHeaderCellDef>Name</th>
+            <td mat-cell *matCellDef="let row">{{ row.name }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="startnr">
+            <th mat-header-cell *matHeaderCellDef>Startnr</th>
+            <td mat-cell *matCellDef="let row">{{ row.startnr }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="disziplin">
+            <th mat-header-cell *matHeaderCellDef>Disziplin</th>
+            <td mat-cell *matCellDef="let row">{{ row.disziplin }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="taster">
+            <th mat-header-cell *matHeaderCellDef>Taster</th>
+            <td mat-cell *matCellDef="let row">{{ row.taster }}</td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+
+          <!-- empty like screenshot -->
+<!--          <tr *ngIf="bahnen.length === 0">
+            <td [attr.colspan]="displayedColumns.length" class="empty-row"></td>
+          </tr>-->
+        </table>
+      </mat-card-content>
+    </mat-card>
+
+    <!-- Taster -->
+    <mat-card class="side">
+      <div class="card-head">
+        <mat-card-title>Taster (Drag &amp; Drop)</mat-card-title>
+        <button mat-stroked-button (click)="refreshTaster()">Aktualisieren</button>
+      </div>
+
+      <mat-card-content>
+        <div class="help muted">{{ letzteAktualisierungText }}</div>
+
+        <div class="dnd-grid">
+          <div>
+            <div class="dnd-title">Verfügbar</div>
+            <div
+              cdkDropList
+              [cdkDropListData]="tasterPool"
+              [cdkDropListConnectedTo]="['assignedList']"
+              class="dropzone"
+              (cdkDropListDropped)="dropTaster($event)"
+            >
+              <div class="chip" *ngFor="let t of tasterPool" cdkDrag>{{ t }}</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="dnd-title">Zugewiesen</div>
+            <div
+              cdkDropList
+              id="assignedList"
+              [cdkDropListData]="tasterAssigned"
+              class="dropzone"
+              (cdkDropListDropped)="dropTaster($event)"
+            >
+              <div class="chip" *ngFor="let t of tasterAssigned" cdkDrag>{{ t }}</div>
+            </div>
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

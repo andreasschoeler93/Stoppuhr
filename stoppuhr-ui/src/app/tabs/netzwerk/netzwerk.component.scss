@@ -1,0 +1,24 @@
+.wrap {
+  padding-top: 18px;
+}
+
+.muted {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.w-100 {
+  width: 100%;
+}
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}

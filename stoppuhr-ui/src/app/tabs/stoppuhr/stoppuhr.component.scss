@@ -1,0 +1,107 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 18px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.w-100 {
+  width: 100%;
+}
+
+.help {
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.help.muted {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.actions-right {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.72);
+  padding-top: 22px;
+}
+
+.bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 18px;
+  align-items: start;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 0 16px;
+}
+
+.meta {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.grow {
+  min-height: 240px;
+}
+
+.side {
+  min-height: 240px;
+}
+
+table {
+  width: 100%;
+}
+
+.empty-row {
+  height: 120px;
+}
+
+.dnd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.dnd-title {
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: rgba(0, 0, 0, 0.72);
+}
+
+.dropzone {
+  border: 1px dashed rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  min-height: 120px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chip {
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: white;
+  cursor: grab;
+  user-select: none;
+}

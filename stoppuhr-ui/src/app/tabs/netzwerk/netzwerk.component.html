@@ -1,0 +1,24 @@
+<div class="wrap">
+  <mat-card>
+    <mat-card-title>Netzwerk</mat-card-title>
+    <mat-card-content>
+      <p class="muted">Platzhalter: Netzwerk/Socket/Device-Discovery etc.</p>
+
+      <div class="grid">
+        <mat-form-field appearance="outline" class="w-100">
+          <mat-label>Host</mat-label>
+          <input matInput [(ngModel)]="host" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="w-100">
+          <mat-label>Port</mat-label>
+          <input matInput type="number" [(ngModel)]="port" />
+        </mat-form-field>
+      </div>
+
+      <div class="actions">
+        <button mat-stroked-button color="primary">Testen</button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

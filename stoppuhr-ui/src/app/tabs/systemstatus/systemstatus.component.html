@@ -1,0 +1,19 @@
+<div class="wrap">
+  <mat-card>
+    <mat-card-title>Systemstatus</mat-card-title>
+    <mat-card-content>
+      <p class="muted">Platzhalter: hier kommen Healthchecks/Logs/Verbindungsstatus rein.</p>
+
+      <div class="list">
+        <div class="row" *ngFor="let s of status">
+          <div class="k">{{ s.key }}</div>
+          <div class="v">{{ s.value }}</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button mat-stroked-button>Aktualisieren</button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+</div>

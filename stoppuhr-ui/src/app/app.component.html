@@ -1,0 +1,23 @@
+<div class="header">
+  <div class="title">Stoppuhr – Läufe, Bahnen & Taster</div>
+  <div class="version">Version: –</div>
+</div>
+
+<nav mat-tab-nav-bar>
+  <a mat-tab-link routerLink="/stoppuhr" routerLinkActive #rla1="routerLinkActive" [active]="rla1.isActive">
+    Stoppuhr
+  </a>
+  <a mat-tab-link routerLink="/einstellungen" routerLinkActive #rla2="routerLinkActive" [active]="rla2.isActive">
+    Einstellungen
+  </a>
+  <a mat-tab-link routerLink="/systemstatus" routerLinkActive #rla3="routerLinkActive" [active]="rla3.isActive">
+    Systemstatus
+  </a>
+  <a mat-tab-link routerLink="/netzwerk" routerLinkActive #rla4="routerLinkActive" [active]="rla4.isActive">
+    Netzwerk
+  </a>
+</nav>
+
+<div class="content">
+  <router-outlet></router-outlet>
+</div>
