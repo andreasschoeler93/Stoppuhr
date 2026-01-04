@@ -10,6 +10,7 @@ services:
       - REDIS_PORT=6379
     networks:
       - app-net
+    mem_limit: 1g # 1GB memory limit
 
   redis:
     image: redis:8.4
