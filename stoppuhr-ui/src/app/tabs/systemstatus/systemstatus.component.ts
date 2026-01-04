@@ -17,7 +17,7 @@ export class SystemstatusComponent {
 
   // Use the resource from the service
   // In the template, we access it via systemStatus.value()
-  systemStatus = this.statusService.systemResource;
+  systemStatus = this.statusService.systemStatusResource;
 
   get letzteAktualisierung() {
     return new Date().toLocaleString();

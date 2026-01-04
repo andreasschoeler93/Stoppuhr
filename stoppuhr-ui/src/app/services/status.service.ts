@@ -23,13 +23,15 @@ export interface SystemStatus {
   dienst: string;
 }
 
+
+
 @Injectable({
   providedIn: 'root'
 })
 export class StatusService {
   private http = inject(HttpClient);
 
-  public systemResource = rxResource({
+  public systemStatusResource = rxResource({
     loader: () => this.http.get<SystemStatus>('/api/system-status')
   });
 }
