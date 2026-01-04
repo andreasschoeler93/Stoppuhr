@@ -23,7 +23,19 @@ export interface SystemStatus {
   dienst: string;
 }
 
+export interface NetworkInterfaceInfo {
+  name: string;
+  state: string;
+  mac: string;
+  ipv4: string;
+  ipv6: string;
+}
 
+export interface NetworkStatus {
+  default_gateway: string;
+  dns_servers: string[];
+  interfaces: { [key: string]: NetworkInterfaceInfo };
+}
 
 @Injectable({
   providedIn: 'root'
@@ -33,5 +45,9 @@ export class StatusService {
 
   public systemStatusResource = rxResource({
     loader: () => this.http.get<SystemStatus>('/api/system-status')
+  });
+
+  public networkStatusResource = rxResource({
+    loader: () => this.http.get<NetworkStatus>('/api/network-status')
   });
 }

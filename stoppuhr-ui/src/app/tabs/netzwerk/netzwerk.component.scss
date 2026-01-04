@@ -1,24 +1,84 @@
-.wrap {
+.page {
   padding-top: 18px;
 }
 
-.muted {
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.subtitle {
+  margin-top: 6px;
+  font-size: 13px;
   color: rgba(0, 0, 0, 0.65);
 }
 
-.grid {
+.error {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #b00020;
+}
+
+.card {
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: none;
+}
+
+.top-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 10px;
+  gap: 24px;
 }
 
-.w-100 {
-  width: 100%;
+.divider {
+  margin: 14px 0;
 }
 
-.actions {
-  margin-top: 12px;
+.section-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+
+.interfaces-container {
+  display: grid;
+  gap: 1rem;
+
+  grid-template-columns: 1fr;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+
+.iface {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 6px;
+}
+
+
+.k {
+  font-weight: 700;
+}
+
+.v {
+  font-weight: 400;
+}
+
+.kv {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: baseline;
 }

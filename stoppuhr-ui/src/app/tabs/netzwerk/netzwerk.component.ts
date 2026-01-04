@@ -1,19 +1,36 @@
-import {Component} from '@angular/core';
+import {Component, inject, OnInit, signal} from '@angular/core';
 import {CommonModule} from '@angular/common';
+
 import {MatCardModule} from '@angular/material/card';
-import {MatFormField, MatInput, MatLabel} from '@angular/material/input';
-import {FormsModule} from '@angular/forms';
-import {MatButton} from '@angular/material/button';
+import {MatButtonModule} from '@angular/material/button';
+import {MatDividerModule} from '@angular/material/divider';
+
+import {StatusService} from '../../services/status.service';
 
 @Component({
   selector: 'app-netzwerk',
+  standalone: true,
+  imports: [CommonModule, MatCardModule, MatButtonModule, MatDividerModule],
   templateUrl: './netzwerk.component.html',
   styleUrls: ['./netzwerk.component.scss'],
-  standalone: true,
-  imports: [CommonModule, MatCardModule, MatFormField, MatLabel, FormsModule, MatButton, MatInput],
 })
-export class NetzwerkComponent {
-  // stub
-  host = '192.168.178.33';
-  port = 8082;
+export class NetzwerkComponent implements OnInit{
+  private readonly refreshTick = signal(0);
+  readonly letzteAktualisierung = signal<string>('–');
+
+  private statusService = inject(StatusService);
+
+  readonly netzwerk = this.statusService.networkStatusResource
+
+
+  ngOnInit() {
+    this.refresh();
+  }
+
+  refresh() {
+    this.refreshTick.update(v => v + 1);
+    this.letzteAktualisierung.set(new Date().toLocaleTimeString());
+  }
+
+
 }

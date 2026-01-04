@@ -1,24 +1,73 @@
-<div class="wrap">
-  <mat-card>
-    <mat-card-title>Netzwerk</mat-card-title>
-    <mat-card-content>
-      <p class="muted">Platzhalter: Netzwerk/Socket/Device-Discovery etc.</p>
+<div class="page">
+  <div class="header">
+    <div>
+      <div class="title">Netzwerkstatus</div>
+    </div>
 
-      <div class="grid">
-        <mat-form-field appearance="outline" class="w-100">
-          <mat-label>Host</mat-label>
-          <input matInput [(ngModel)]="host" />
-        </mat-form-field>
+    <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
+  </div>
 
-        <mat-form-field appearance="outline" class="w-100">
-          <mat-label>Port</mat-label>
-          <input matInput type="number" [(ngModel)]="port" />
-        </mat-form-field>
+  <div class="subtitle">
+    Letzte Aktualisierung: {{ letzteAktualisierung() }}
+    @if (netzwerk.isLoading()) {
+      <span>• lädt…</span>
+    }
+  </div>
+
+  @if (netzwerk.value(); as n) {
+    <mat-card class="card">
+      <!-- Gateway / DNS -->
+      <div class="top-grid">
+        <div class="kv">
+          <span class="k">Standard-Gateway:</span>
+          <span class="v">{{ n.default_gateway }}</span>
+        </div>
+
+        <div class="kv">
+          <span class="k">DNS-Server:</span>
+          <span class="v">
+            @for (dns of n.dns_servers; track dns; let last = $last) {
+              {{ dns }}@if (!last) { , }
+            }
+          </span>
+        </div>
       </div>
 
-      <div class="actions">
-        <button mat-stroked-button color="primary">Testen</button>
+      <mat-divider class="divider"></mat-divider>
+
+      <div class="section-title">Schnittstellen:</div>
+
+      <div class="interfaces-container">
+        @for (item of n.interfaces | keyvalue; track item.key) {
+          <div class="iface">
+            <div class="iface-title">
+              <span class="k">{{ item.key }}:</span>
+              <span class="v">{{ item.value.state }}</span>
+            </div>
+
+            <div class="kv">
+              <span class="k">MAC:</span>
+              <span class="v">{{ item.value.mac }}</span>
+            </div>
+            <div class="kv">
+              <span class="k">IPv4:</span>
+              <span class="v">{{ item.value.ipv4 }}</span>
+            </div>
+            <div class="kv">
+              <span class="k">IPv6:</span>
+              <span class="v">{{ item.value.ipv6 }}</span>
+            </div>
+          </div>
+        }
       </div>
-    </mat-card-content>
-  </mat-card>
+
+      @if (netzwerk.error()) {
+        <div class="error">Konnte Netzwerkstatus nicht laden.</div>
+      }
+    </mat-card>
+  } @else if (netzwerk.isLoading()) {
+    <div class="loading">Lade Netzwerkstatus…</div>
+  } @else {
+    <div class="empty">Keine Netzwerkdaten verfügbar.</div>
+  }
 </div>
