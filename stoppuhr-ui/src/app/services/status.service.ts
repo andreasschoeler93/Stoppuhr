@@ -26,7 +26,7 @@ export interface SystemStatus {
 @Injectable({
   providedIn: 'root'
 })
-export class SystemStatusService {
+export class StatusService {
   private http = inject(HttpClient);
 
   public systemResource = rxResource({

@@ -3,7 +3,7 @@ import {CommonModule} from '@angular/common';
 import {MatCardModule} from '@angular/material/card';
 import {MatButtonModule} from '@angular/material/button';
 import {MatDividerModule} from '@angular/material/divider';
-import {SystemStatusService} from '../../services/system-status.service';
+import {StatusService} from '../../services/status.service';
 
 @Component({
   selector: 'app-systemstatus',
@@ -13,7 +13,7 @@ import {SystemStatusService} from '../../services/system-status.service';
   styleUrl: './systemstatus.component.scss'
 })
 export class SystemstatusComponent {
-  private statusService = inject(SystemStatusService);
+  private statusService = inject(StatusService);
 
   // Use the resource from the service
   // In the template, we access it via systemStatus.value()
