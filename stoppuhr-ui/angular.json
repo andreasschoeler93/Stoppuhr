@@ -68,7 +68,8 @@
               "buildTarget": "stoppuhr-ui:build:production"
             },
             "development": {
-              "buildTarget": "stoppuhr-ui:build:development"
+              "buildTarget": "stoppuhr-ui:build:development",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"

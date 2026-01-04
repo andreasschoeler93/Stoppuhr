@@ -1,19 +1,72 @@
-<div class="wrap">
-  <mat-card>
-    <mat-card-title>Systemstatus</mat-card-title>
-    <mat-card-content>
-      <p class="muted">Platzhalter: hier kommen Healthchecks/Logs/Verbindungsstatus rein.</p>
+<div class="page">
+  <div class="header">
+    <div class="title">Systemstatus</div>
+    <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
+  </div>
 
-      <div class="list">
-        <div class="row" *ngFor="let s of status">
-          <div class="k">{{ s.key }}</div>
-          <div class="v">{{ s.value }}</div>
+  <div class="subtitle">
+    Letzte Aktualisierung: {{ letzteAktualisierung }}
+  </div>
+
+  <!-- Use @if to wait for the resource value -->
+  @if (systemStatus.value(); as status) {
+    <mat-card class="card">
+      <div class="grid">
+        <!-- Left column -->
+        <div class="col">
+          <div class="row">
+            <span class="k">Hostname:</span>
+            <span class="v">{{ status.hostname }}</span>
+          </div>
+
+          <div class="row">
+            <span class="k">CPU:</span>
+            <span class="v">{{ status.cpu_percent | number:'1.1-1' }}%</span>
+          </div>
+
+          <div class="row">
+            <span class="k">Disk /:</span>
+            <span class="v">
+              {{ status.disk.percent | number:'1.1-1' }}%
+              ({{ status.disk.free | number:'1.1-1' }} / {{ status.disk.used | number:'1.1-1' }} GB)
+            </span>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div class="col">
+          <div class="row">
+            <span class="k">Uptime:</span>
+            <span class="v">{{ status.uptime }}</span>
+          </div>
+
+          <div class="row">
+            <span class="k">RAM:</span>
+            <span class="v">
+              {{ status.mem.percent | number:'1.1-1'}}%
+              ({{ status.mem.used.toFixed(0) }} / {{ status.mem.total.toFixed(0)}} MB)
+            </span>
+          </div>
+
+          <div class="row">
+            <span class="k">Load:</span>
+            <span class="v">
+              {{ status.load_avg[0] | number:'1.2-2' }} /
+              {{ status.load_avg[1] | number:'1.2-2' }} /
+              {{ status.load_avg[2] | number:'1.2-2' }}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div class="actions">
-        <button mat-stroked-button>Aktualisieren</button>
+      <mat-divider class="divider"></mat-divider>
+
+      <div class="dienst">
+        <span class="k">Dienst:</span>
+        <span class="v">{{ dienstLabel(status.dienst) }}</span>
       </div>
-    </mat-card-content>
-  </mat-card>
+    </mat-card>
+  } @else if (systemStatus.isLoading()) {
+    <div class="loading">Lade Systemstatus...</div>
+  }
 </div>

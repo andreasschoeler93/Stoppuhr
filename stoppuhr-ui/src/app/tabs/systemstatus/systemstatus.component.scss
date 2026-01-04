@@ -1,40 +1,64 @@
-.wrap {
+.page {
   padding-top: 18px;
 }
 
-.muted {
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.subtitle {
+  margin-top: 8px;
+  font-size: 13px;
   color: rgba(0, 0, 0, 0.65);
 }
 
-.list {
-  margin-top: 12px;
+.card {
+  margin-top: 10px;
+  padding: 14px 16px;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 8px;
-  overflow: hidden;
+  box-shadow: none; // näher am Screenshot (flach)
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .row {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 12px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.row:last-child {
-  border-bottom: none;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
 }
 
 .k {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .v {
-  color: rgba(0, 0, 0, 0.7);
+  font-weight: 400;
 }
 
-.actions {
-  margin-top: 12px;
+.divider {
+  margin: 14px 0;
+}
+
+.dienst {
   display: flex;
-  justify-content: flex-end;
+  gap: 6px;
+  align-items: baseline;
 }
