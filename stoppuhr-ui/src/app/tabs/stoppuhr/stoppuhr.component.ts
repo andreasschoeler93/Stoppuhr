@@ -1,6 +1,6 @@
 import {Component, computed, inject} from '@angular/core';
 import {CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem} from '@angular/cdk/drag-drop';
-import {BahnRow, LaufOption} from './models';
+import {BahnRow} from './models';
 import {CommonModule} from '@angular/common';
 import {MatCardModule} from '@angular/material/card';
 import {MatTableDataSource, MatTableModule} from '@angular/material/table';
@@ -32,30 +32,36 @@ export class StoppuhrComponent {
 
   private statusService = inject(StatusService);
   protected jauswertungService = inject(JAuswertungService);
+  public runs: string[] = [];
 
   fullUrl = computed(() => {
     const s = this.statusService.settingsResource.value();
     if (!s || !s.startcards_base_url) return 'URL nicht konfiguriert';
     return s.startcards_base_url + (s.startcards_suffix || '');
   });
-    statusText = computed(() => {
-    const resource = this.jauswertungService.startkartenResource;
+  statusText = computed(() => {
+  const resource = this.jauswertungService.startkartenResource;
 
-    if (resource.isLoading()) return 'Lade Startkarten...';
-    if (resource.error()) {
-      // You can check the error object here if needed
-      return 'Fehler: Konnte Startkarten nicht laden.';
-    }
-    if (resource.value()) {
-      return `Erfolgreich geladen (${new Date().toLocaleTimeString()})`;
-    }
-    return 'Status: bereit.';
+  if (resource.isLoading()) return 'Lade Startkarten...';
+  if (resource.error()) {
+    // You can check the error object here if needed
+    return 'Fehler: Konnte Startkarten nicht laden.';
+  }
+  if (resource.value()) {
+    return `Erfolgreich geladen (${new Date().toLocaleTimeString()})`;
+  }
+  return 'Status: bereit.';
   });
 
-  laufOptions: LaufOption[] = [
-    { value: 'lauf1', label: 'Lauf 1' },
-    { value: 'lauf2', label: 'Lauf 2' },
-  ];
+  laufOptions = computed(() => {
+    const data = this.jauswertungService.startkartenResource.value();
+    if (!data || !data.runs) return [];
+
+    return data.runs.map(run => ({
+      value: run,
+      label: `Lauf ${run}`
+    }));
+  });
   selectedLauf: string | null = null;
 
   maxBahnenText = 'Max. Bahnen: –';

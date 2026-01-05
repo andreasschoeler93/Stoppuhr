@@ -1,14 +1,13 @@
 <div class="content">
   <!-- Card 1 -->
   <mat-card>
-    <mat-card-title>Verbindung zu JAuswertung, um Starkarten zu laden</mat-card-title>
+    <mat-card-title>Verbindung zu JAuswertung, um Startkarten zu laden</mat-card-title>
 
     <mat-card-content>
       <div class="grid-2">
         <div class="status-info">
             <p class="muted small"><b>Quelle</b>: {{ fullUrl() }}</p>
           <div class="help">Änderbar im Tab <b>Einstellungen</b>.</div>
-
         </div>
 
         <div>
@@ -33,7 +32,7 @@
           <mat-form-field appearance="outline" class="w-100">
             <mat-label>Aktueller Lauf</mat-label>
             <mat-select [(ngModel)]="selectedLauf">
-              <mat-option *ngFor="let opt of laufOptions" [value]="opt.value">
+              <mat-option *ngFor="let opt of laufOptions()" [value]="opt.value">
                 {{ opt.label }}
               </mat-option>
             </mat-select>
