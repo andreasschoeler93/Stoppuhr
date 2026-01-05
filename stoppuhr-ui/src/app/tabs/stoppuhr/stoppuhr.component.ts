@@ -24,7 +24,7 @@ import {JAuswertungService} from '../../services/jauswertung.service';
     MatSelectModule,
     MatTableModule,
     DragDropModule,
-    ],
+  ],
   templateUrl: './stoppuhr.component.html',
   styleUrls: ['./stoppuhr.component.scss'],
 })
@@ -40,17 +40,17 @@ export class StoppuhrComponent {
     return s.startcards_base_url + (s.startcards_suffix || '');
   });
   statusText = computed(() => {
-  const resource = this.jauswertungService.startkartenResource;
+    const resource = this.jauswertungService.startkartenResource;
 
-  if (resource.isLoading()) return 'Lade Startkarten...';
-  if (resource.error()) {
-    // You can check the error object here if needed
-    return 'Fehler: Konnte Startkarten nicht laden.';
-  }
-  if (resource.value()) {
-    return `Erfolgreich geladen (${new Date().toLocaleTimeString()})`;
-  }
-  return 'Status: bereit.';
+    if (resource.isLoading()) return 'Lade Startkarten...';
+    if (resource.error()) {
+      // You can check the error object here if needed
+      return 'Fehler: Konnte Startkarten nicht laden.';
+    }
+    if (resource.value()) {
+      return `Erfolgreich geladen (${new Date().toLocaleTimeString()})`;
+    }
+    return 'Status: bereit.';
   });
 
   laufOptions = computed(() => {
@@ -75,7 +75,6 @@ export class StoppuhrComponent {
   // Demo drag&drop
   tasterPool: string[] = ['Taster 1', 'Taster 2', 'Taster 3'];
   tasterAssigned: string[] = [];
-
 
 
   loadStartkarten() {

@@ -1,6 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {ComponentFixture, TestBed} from '@angular/core/testing';
 
-import { SystemstatusComponent } from './systemstatus.component';
+import {SystemstatusComponent} from './systemstatus.component';
 
 describe('SystemstatusComponent', () => {
   let component: SystemstatusComponent;
@@ -10,7 +10,7 @@ describe('SystemstatusComponent', () => {
     await TestBed.configureTestingModule({
       imports: [SystemstatusComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(SystemstatusComponent);
     component = fixture.componentInstance;

@@ -25,7 +25,7 @@ export class EinstellungenComponent {
     effect(() => {
       const remoteSettings = this.statusService.settingsResource.value();
       if (remoteSettings) {
-        this.settings = { ...remoteSettings };
+        this.settings = {...remoteSettings};
       }
     });
   }

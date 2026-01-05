@@ -1,6 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {ComponentFixture, TestBed} from '@angular/core/testing';
 
-import { NetzwerkComponent } from './netzwerk.component';
+import {NetzwerkComponent} from './netzwerk.component';
 
 describe('NetzwerkComponent', () => {
   let component: NetzwerkComponent;
@@ -10,7 +10,7 @@ describe('NetzwerkComponent', () => {
     await TestBed.configureTestingModule({
       imports: [NetzwerkComponent]
     })
-    .compileComponents();
+      .compileComponents();
 
     fixture = TestBed.createComponent(NetzwerkComponent);
     component = fixture.componentInstance;

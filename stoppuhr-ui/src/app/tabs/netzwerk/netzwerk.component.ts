@@ -14,7 +14,7 @@ import {StatusService} from '../../services/status.service';
   templateUrl: './netzwerk.component.html',
   styleUrls: ['./netzwerk.component.scss'],
 })
-export class NetzwerkComponent implements OnInit{
+export class NetzwerkComponent implements OnInit {
   private readonly refreshTick = signal(0);
   readonly letzteAktualisierung = signal<string>('–');
 

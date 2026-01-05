@@ -27,7 +27,9 @@
           <span class="k">DNS-Server:</span>
           <span class="v">
             @for (dns of n.dns_servers; track dns; let last = $last) {
-              {{ dns }}@if (!last) { , }
+              {{ dns }}@if (!last) {
+                ,
+              }
             }
           </span>
         </div>

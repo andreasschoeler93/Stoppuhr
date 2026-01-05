@@ -1,7 +1,7 @@
 <div class="header">
   <div class="title">Stoppuhr – Läufe, Bahnen & Taster</div>
-    <div>
-      @if (statusService.versionResource.value(); as versionInfo) {
+  <div>
+    @if (statusService.versionResource.value(); as versionInfo) {
       Version: {{ versionInfo.version }} <small>({{ versionInfo.status }})</small>
     } @else if (statusService.versionResource.isLoading()) {
       Version: Lade...

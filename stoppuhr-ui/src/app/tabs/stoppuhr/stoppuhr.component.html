@@ -6,7 +6,7 @@
     <mat-card-content>
       <div class="grid-2">
         <div class="status-info">
-            <p class="muted small"><b>Quelle</b>: {{ fullUrl() }}</p>
+          <p class="muted small"><b>Quelle</b>: {{ fullUrl() }}</p>
           <div class="help">Änderbar im Tab <b>Einstellungen</b>.</div>
         </div>
 
@@ -87,9 +87,9 @@
           <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
 
           <!-- empty like screenshot -->
-<!--          <tr *ngIf="bahnen.length === 0">
-            <td [attr.colspan]="displayedColumns.length" class="empty-row"></td>
-          </tr>-->
+          <!--          <tr *ngIf="bahnen.length === 0">
+                      <td [attr.colspan]="displayedColumns.length" class="empty-row"></td>
+                    </tr>-->
         </table>
       </mat-card-content>
     </mat-card>
