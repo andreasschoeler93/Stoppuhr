@@ -219,8 +219,6 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
     base_url = state["settings"].get("startcards_base_url", None)
     suffix = state["settings"].get("startcards_suffix", None)
     if not base_url:
-        state["startcards"]["last_error"] = "base_url_missing"
-        save_state(state)
         return jsonify({"ok": False, "error": "base_url_missing"}), 400
 
     if not suffix:
