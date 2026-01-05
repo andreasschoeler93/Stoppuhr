@@ -1,4 +1,4 @@
-import {Component} from '@angular/core';
+import {Component, computed, inject} from '@angular/core';
 import {CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem} from '@angular/cdk/drag-drop';
 import {BahnRow, LaufOption} from './models';
 import {CommonModule} from '@angular/common';
@@ -9,6 +9,8 @@ import {MatInputModule} from '@angular/material/input';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatButtonModule} from '@angular/material/button';
 import {MatSelectModule} from '@angular/material/select';
+import {StatusService} from '../../services/status.service';
+import {JAuswertungService} from '../../services/jauswertung.service';
 
 @Component({
   selector: 'app-stoppuhr',
@@ -27,10 +29,28 @@ import {MatSelectModule} from '@angular/material/select';
   styleUrls: ['./stoppuhr.component.scss'],
 })
 export class StoppuhrComponent {
-  // Header-ish values typically come from app shell; kept here for feature demo
-  baseUrl = '192.168.178.33:8082';
-  startkartenPfad = '';
-  statusText = 'Status: noch nicht geladen.';
+
+  private statusService = inject(StatusService);
+  protected jauswertungService = inject(JAuswertungService);
+
+  fullUrl = computed(() => {
+    const s = this.statusService.settingsResource.value();
+    if (!s || !s.startcards_base_url) return 'URL nicht konfiguriert';
+    return s.startcards_base_url + (s.startcards_suffix || '');
+  });
+    statusText = computed(() => {
+    const resource = this.jauswertungService.startkartenResource;
+
+    if (resource.isLoading()) return 'Lade Startkarten...';
+    if (resource.error()) {
+      // You can check the error object here if needed
+      return 'Fehler: Konnte Startkarten nicht laden.';
+    }
+    if (resource.value()) {
+      return `Erfolgreich geladen (${new Date().toLocaleTimeString()})`;
+    }
+    return 'Status: bereit.';
+  });
 
   laufOptions: LaufOption[] = [
     { value: 'lauf1', label: 'Lauf 1' },
@@ -50,21 +70,24 @@ export class StoppuhrComponent {
   tasterPool: string[] = ['Taster 1', 'Taster 2', 'Taster 3'];
   tasterAssigned: string[] = [];
 
+
+
   loadStartkarten() {
     // TODO: replace with API call
-    this.statusText = 'Status: Startkarten geladen (Demo).';
     this.maxBahnenText = 'Max. Bahnen: 8 (Demo)';
 
-    // Example data population (replace with real data from API)
-    const demoBahnen: BahnRow[] = Array.from({ length: 8 }, (_, i) => ({
-      bahn: i + 1,
-      name: `Name ${i + 1}`,
-      startnr: `Startnr ${i + 1}`,
-      disziplin: `Disziplin ${i + 1}`,
-      taster: ''
-    }));
+    // // Example data population (replace with real data from API)
+    // const demoBahnen: BahnRow[] = Array.from({ length: 8 }, (_, i) => ({
+    //   bahn: i + 1,
+    //   name: `Name ${i + 1}`,
+    //   startnr: `Startnr ${i + 1}`,
+    //   disziplin: `Disziplin ${i + 1}`,
+    //   taster: ''
+    // }));
+    this.jauswertungService.reload();
 
-    this.dataSource.data = demoBahnen;  // Set data for MatTable
+    // this.dataSource.data = demoBahnen;  // Set data for MatTable
+
   }
 
   refreshTaster() {

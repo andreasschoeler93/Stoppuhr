@@ -1,32 +1,23 @@
 <div class="content">
   <!-- Card 1 -->
   <mat-card>
-    <mat-card-title>Verbindung zu JAuswertung um Starkarten zu laden</mat-card-title>
+    <mat-card-title>Verbindung zu JAuswertung, um Starkarten zu laden</mat-card-title>
 
     <mat-card-content>
       <div class="grid-2">
-        <div>
-          <mat-form-field appearance="outline" class="w-100">
-            <mat-label>Basis-URL (IP:Port, ohne Pfad)</mat-label>
-            <input matInput [(ngModel)]="baseUrl" />
-          </mat-form-field>
+        <div class="status-info">
+            <p class="muted small"><b>Quelle</b>: {{ fullUrl() }}</p>
+          <div class="help">Änderbar im Tab <b>Einstellungen</b>.</div>
 
-          <div class="help">Wird in den Einstellungen gespeichert.</div>
-          <div class="help muted">{{ statusText }}</div>
         </div>
 
         <div>
-          <mat-form-field appearance="outline" class="w-100">
-            <mat-label>Startkarten-Pfad</mat-label>
-            <input matInput [value]="startkartenPfad" disabled />
-          </mat-form-field>
-
-          <div class="help">Änderbar im Tab <b>Einstellungen</b>.</div>
-
           <div class="actions-right">
             <button mat-stroked-button color="primary" (click)="loadStartkarten()">
               Startkarten laden
             </button>
+            <p>{{ statusText }}</p>
+
           </div>
         </div>
       </div>
