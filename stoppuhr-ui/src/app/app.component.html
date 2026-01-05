@@ -1,6 +1,14 @@
 <div class="header">
   <div class="title">Stoppuhr – Läufe, Bahnen & Taster</div>
-  <div class="version">Version: –</div>
+    <div>
+      @if (statusService.versionResource.value(); as versionInfo) {
+      Version: {{ versionInfo.version }} <small>({{ versionInfo.status }})</small>
+    } @else if (statusService.versionResource.isLoading()) {
+      Version: Lade...
+    } @else {
+      Version: –
+    }
+  </div>
 </div>
 
 <nav mat-tab-nav-bar [tabPanel]="tabPanel">

@@ -42,11 +42,20 @@ export interface Settings {
   startcards_suffix: string;
 }
 
+export interface AppVersion {
+  version: string;
+  status: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class StatusService {
   private http = inject(HttpClient);
+
+  public versionResource = rxResource({
+    loader: () => this.http.get<AppVersion>('/api/version')
+  });
 
   public systemStatusResource = rxResource({
     loader: () => this.http.get<SystemStatus>('/api/system-status')
