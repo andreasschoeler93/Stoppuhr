@@ -14,3 +14,16 @@
   display: flex;
   justify-content: flex-end;
 }
+
+
+.input-row {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+
+  // On small screens, stack them vertically again
+  @media (max-width: 600px) {
+    flex-direction: column;
+    gap: 0;
+  }
+}

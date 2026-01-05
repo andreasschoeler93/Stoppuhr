@@ -37,6 +37,11 @@ export interface NetworkStatus {
   interfaces: { [key: string]: NetworkInterfaceInfo };
 }
 
+export interface Settings {
+  startcards_base_url: string;
+  startcards_suffix: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -50,4 +55,12 @@ export class StatusService {
   public networkStatusResource = rxResource({
     loader: () => this.http.get<NetworkStatus>('/api/network-status')
   });
+
+  public settingsResource = rxResource({
+    loader: () => this.http.get<Settings>('/api/settings')
+  });
+
+  updateSettings(settings: Settings) {
+    return this.http.post<Settings>('/api/settings', settings);
+  }
 }

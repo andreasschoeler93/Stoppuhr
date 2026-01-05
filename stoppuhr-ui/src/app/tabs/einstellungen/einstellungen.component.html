@@ -1,19 +1,26 @@
 <div class="wrap">
   <mat-card>
     <mat-card-title>Einstellungen</mat-card-title>
-    <mat-card-content>
-      <p class="muted">
-        Hier kannst du z. B. den Startkarten-Pfad, Timeouts, Ports, Logging usw. konfigurieren.
-      </p>
+        <mat-card-content>
+          <p class="muted">
+            Hier kannst du z. B. den Startkarten-Pfad usw. konfigurieren.
+          </p>
 
-      <mat-form-field appearance="outline" class="w-100">
-        <mat-label>Startkarten-Pfad</mat-label>
-        <input matInput [(ngModel)]="startkartenPfad" />
-      </mat-form-field>
+          <div class="input-row">
+            <mat-form-field appearance="outline" class="w-100">
+              <mat-label>JAuswertung HTTP-Server URL mit Port</mat-label>
+              <input matInput [(ngModel)]="settings.startcards_base_url" placeholder="z.B. 192.168.1.10" />
+            </mat-form-field>
 
-      <div class="actions">
-        <button mat-stroked-button color="primary">Speichern</button>
-      </div>
-    </mat-card-content>
+            <mat-form-field appearance="outline" class="w-100">
+              <mat-label>Startkarten-Pfad (Suffix)</mat-label>
+              <input matInput [(ngModel)]="settings.startcards_suffix" />
+            </mat-form-field>
+          </div>
+
+          <div class="actions">
+            <button mat-stroked-button color="primary" (click)="save()">Speichern</button>
+          </div>
+        </mat-card-content>
   </mat-card>
 </div>
