@@ -212,36 +212,19 @@ def api_post_triggers():
     return jsonify({"ok": True, "trigger": entry})
 
 
-# --- END ---
-
-
-@app.post("/api/startcards/reload")
-def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
-    """
-    Manuelles Nachladen der Startkarten von der Auswertungssoftware.
-    - Kein Auto-Refresh (Robustheit): wird nur auf Nutzeraktion geladen.
-    - Basis-URL + Suffix werden aus Settings genommen (oder können im Request überschrieben werden).
-    """
+@app.get("/api/startcards")
+def api_load_startcards() -> tuple[ResponseReturnValue, int]:
     state = load_state()
-    data = request.get_json(silent=True) or {}
 
-    base_url = str(data.get("base_url", state["settings"].get("startcards_base_url", ""))).strip()
-    suffix = str(
-        data.get(
-            "suffix",
-            state["settings"].get("startcards_suffix", "/export/CSV/Startkarten.csv"),
-        )
-    ).strip()
-
-    # Settings aktualisieren, damit UI "übernimmt"
-    state["settings"]["startcards_base_url"] = base_url
-    state["settings"]["startcards_suffix"] = suffix
-    save_state(state)
-
+    base_url = state["settings"].get("startcards_base_url", None)
+    suffix = state["settings"].get("startcards_suffix", None)
     if not base_url:
         state["startcards"]["last_error"] = "base_url_missing"
         save_state(state)
         return jsonify({"ok": False, "error": "base_url_missing"}), 400
+
+    if not suffix:
+        state["startcards"]["last_error"] = "suffix_missing"
 
     # Normalisierung: '192.168.x.x:8082' -> 'http://192.168.x.x:8082'
     if not re.match(r"^https?://", base_url, re.IGNORECASE):
@@ -325,12 +308,6 @@ def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
         return jsonify(
             {"ok": False, "error": state["startcards"]["last_error"], "source_url": url}
         ), 500
-
-
-@app.get("/api/startcards")
-def api_get_startcards():
-    st = load_state()
-    return jsonify(st.get("startcards", {}))
 
 
 @app.get("/api/taster-list")
