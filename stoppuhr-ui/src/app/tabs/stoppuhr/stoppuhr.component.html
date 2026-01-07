@@ -1,7 +1,9 @@
 <div class="content">
   <!-- Card 1 -->
   <mat-card>
-    <mat-card-title>Verbindung zu JAuswertung, um Startkarten zu laden</mat-card-title>
+    <mat-card-title>
+      Verbindung zu JAuswertung, um Startkarten zu laden
+    </mat-card-title>
 
     <mat-card-content>
       <div class="grid-2">
@@ -24,10 +26,12 @@
 
   <!-- Card Select run-->
   <mat-card class="mb-3">
+    <mat-card-title>
+      Lauf auswählen
+    </mat-card-title>
     <mat-card-content class="d-flex align-items-center gap-3">
-
       <mat-form-field appearance="outline" class="mt-3">
-        <mat-label>Lauf auswählen</mat-label>
+        <mat-label>Aktueller Lauf</mat-label>
         <mat-select [ngModel]="selectedLauf()" (ngModelChange)="selectedLauf.set($event)" name="laufSelect">
           @if (laufOptions().length === 0) {
             <mat-option disabled>Keine Läufe vorhanden</mat-option>
@@ -47,6 +51,9 @@
   </mat-card>
 
   <mat-card>
+    <mat-card-title>
+      Bahnen
+    </mat-card-title>
     <table mat-table [dataSource]="filteredBahnen()" class="mat-elevation-z2 w-100">
       <!-- Bahn Column -->
       <ng-container matColumnDef="bahn">
