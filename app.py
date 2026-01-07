@@ -14,6 +14,7 @@ import socket
 import struct
 import time
 import urllib.request
+from collections import defaultdict
 from typing import Any, Final, Optional, TypedDict
 
 import psutil
@@ -51,10 +52,11 @@ class State(TypedDict):
     settings: dict[str, str]
     startcards: dict[str, Any]
     tasters: dict[str, Any]
-    vitals: list[dict[str, Any]]  # list[Vital]
+    vitals: list[dict[str, Any]]
     triggers: list[Trigger]
     runs: dict[str, Any]
     assignments: dict[str, Any]
+    startcards_per_run: dict[str, list[dict[str, Any]]]
 
 
 def _default_state() -> State:
@@ -79,6 +81,7 @@ def _default_state() -> State:
         "assignments": {"mapping": {}, "last_update_ts": None},
         "vitals": [],
         "triggers": [],
+        "startcards_per_run": defaultdict(list),
     }
 
 
@@ -219,10 +222,12 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
     base_url = state["settings"].get("startcards_base_url", None)
     suffix = state["settings"].get("startcards_suffix", None)
     if not base_url:
+        state["startcards"]["last_error"] = "base_url_missing"
         return jsonify({"ok": False, "error": "base_url_missing"}), 400
 
     if not suffix:
         state["startcards"]["last_error"] = "suffix_missing"
+        return jsonify({"ok": False, "error": "suffix_missing"}), 400
 
     # Normalisierung: '192.168.x.x:8082' -> 'http://192.168.x.x:8082'
     if not re.match(r"^https?://", base_url, re.IGNORECASE):
@@ -242,56 +247,78 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
         with urllib.request.urlopen(req, timeout=5) as resp:
             raw = resp.read()
 
-        # CSV ist i.d.R. Windows-1252/Latin-1 oder UTF-8; wir versuchen mehrere.
+        # Encoding-Erkennung (wichtig für Umlaute in Namen)
         text_csv = None
         for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
             try:
                 text_csv = raw.decode(enc)
                 break
-            except Exception:
+            except UnicodeDecodeError:
                 continue
+
         if text_csv is None:
             text_csv = raw.decode("latin-1", errors="replace")
 
-        # Semikolon-separiert, Felder evtl. in Anführungszeichen
-        f = io.StringIO(text_csv)
-        reader = csv.DictReader(f, delimiter=";")
-        rows = []
-        for row in reader:
-            # Normalize keys (strip BOM/whitespace)
-            clean = {(k or "").strip(): (v or "").strip() for k, v in row.items()}
-            if any(clean.values()):
-                rows.append(clean)
+        # CSV Verarbeitung mit Semikolon als Trenner
+        f = io.StringIO(text_csv.strip())
 
-        # Derive runs + max_lane
-        max_lane = 0
+        # 2. Use DictReader with semicolon delimiter
+        # quotechar='"' handles the double quotes around your values automatically
+        reader = csv.DictReader(f, delimiter=";", quotechar='"')
+
+        startcards = []
         runs = set()
-        for r in rows:
-            lauf = (r.get("Lauf") or "").strip()
-            if lauf != "":
+        startcards_per_run = defaultdict(list)
+        max_lane = 0
+
+        for startcard in reader:
+            # Clean startcard
+            clean_startcard = {
+                str(k).strip(): str(v).strip() for k, v in startcard.items() if k is not None
+            }
+            if not any(clean_startcard.values()):
+                continue
+
+            startcards.append(clean_startcard)
+            # Determine the run number
+            lauf = clean_startcard.get("Lauf")
+            if lauf:
                 runs.add(lauf)
-            bahn = (r.get("Bahn") or "").strip()
+                startcards_per_run[lauf].append(clean_startcard)
+            # Determine the highest lane number
+            bahn = clean_startcard.get("Bahn")
             try:
-                b = int(float(bahn)) if bahn != "" else 0
-            except Exception:
-                b = 0
-            if b > max_lane:
-                max_lane = b
+                if bahn:
+                    b_int = int(float(bahn))
+                    if b_int > max_lane:
+                        max_lane = b_int
+            except (ValueError, TypeError):
+                pass
 
-        runs_sorted = sorted(runs, key=lambda x: int(x) if str(x).isdigit() else str(x))
+        runs_sorted = sorted(list(runs), key=lambda x: int(x) if str(x).isdigit() else str(x))
 
-        state["startcards"]["rows"] = rows
-        state["startcards"]["last_fetch_ts"] = int(time.time() * 1000)
-        state["startcards"]["last_error"] = None
-        state["startcards"]["source_url"] = url
-        state["startcards"]["max_lane"] = max_lane
-        state["startcards"]["runs"] = runs_sorted
+        # 6. Update the global state
+        state["startcards"].update(
+            {
+                "rows": startcards,
+                "startcards_per_run": startcards_per_run,
+                "row_count": len(startcards),
+                "last_fetch_ts": now_ms(),
+                "last_error": None,
+                "source_url": url,
+                "max_lane": max_lane,
+                "runs": runs_sorted,
+                "loaded": True,
+            }
+        )
         save_state(state)
 
         return jsonify(
             {
                 "ok": True,
-                "row_count": len(rows),
+                "row_count": len(startcards),
+                "rows": startcards,
+                "startcards_per_run": startcards_per_run,
                 "source_url": url,
                 "max_lane": max_lane,
                 "runs": runs_sorted,
