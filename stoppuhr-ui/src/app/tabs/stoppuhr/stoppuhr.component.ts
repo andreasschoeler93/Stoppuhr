@@ -1,9 +1,8 @@
 import {Component, computed, inject, signal} from '@angular/core';
 import {CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem} from '@angular/cdk/drag-drop';
-import {BahnRow} from './models';
 import {CommonModule} from '@angular/common';
 import {MatCardModule} from '@angular/material/card';
-import {MatTableDataSource, MatTableModule} from '@angular/material/table';
+import {MatTableModule} from '@angular/material/table';
 import {FormsModule} from '@angular/forms';
 import {MatInputModule} from '@angular/material/input';
 import {MatFormFieldModule} from '@angular/material/form-field';
@@ -100,41 +99,22 @@ export class StoppuhrComponent {
     }));
   });
 
-  maxBahnenText = 'Max. Bahnen: –';
-  letzteAktualisierungText = 'Letzte Aktualisierung: –';
+  maxBahnenText = computed(() => {
+    const data = this.jauswertungService.startkartenResource.value();
+    if (!data || data.max_lane === undefined) {
+      return 'Max. Bahnen: –';
+    }
+    return `Max. Bahnen: ${data.max_lane}`;
+  });
 
   displayedColumns = ['bahn', 'name', 'startnr', 'disziplin']; // , 'taster'
 
-  // Use MatTableDataSource for bahnen
-  dataSource = new MatTableDataSource<BahnRow>([]);  // Initialized empty
-
-  // Demo drag&drop
-  tasterPool: string[] = ['Taster 1', 'Taster 2', 'Taster 3'];
-  tasterAssigned: string[] = [];
-
 
   loadStartkarten() {
-    // TODO: replace with API call
-    this.maxBahnenText = 'Max. Bahnen: 8 (Demo)';
-
-    // // Example data population (replace with real data from API)
-    // const demoBahnen: BahnRow[] = Array.from({ length: 8 }, (_, i) => ({
-    //   bahn: i + 1,
-    //   name: `Name ${i + 1}`,
-    //   startnr: `Startnr ${i + 1}`,
-    //   disziplin: `Disziplin ${i + 1}`,
-    //   taster: ''
-    // }));
     this.jauswertungService.reload();
 
-    // this.dataSource.data = demoBahnen;  // Set data for MatTable
-
   }
 
-  refreshTaster() {
-    // TODO: replace with API call
-    this.letzteAktualisierungText = `Letzte Aktualisierung: ${new Date().toLocaleString()}`;
-  }
 
   dropTaster(event: CdkDragDrop<string[]>) {
     if (event.previousContainer === event.container) {

@@ -54,6 +54,8 @@
     <mat-card-title>
       Bahnen
     </mat-card-title>
+    <mat-card-subtitle style="margin-left:auto">{{ maxBahnenText() }}</mat-card-subtitle>
+
     <table mat-table [dataSource]="filteredBahnen()" class="mat-elevation-z2 w-100">
       <!-- Bahn Column -->
       <ng-container matColumnDef="bahn">
