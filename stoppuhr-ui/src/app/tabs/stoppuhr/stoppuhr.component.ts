@@ -1,4 +1,4 @@
-import {Component, computed, inject} from '@angular/core';
+import {Component, computed, inject, signal} from '@angular/core';
 import {CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem} from '@angular/cdk/drag-drop';
 import {BahnRow} from './models';
 import {CommonModule} from '@angular/common';
@@ -53,21 +53,47 @@ export class StoppuhrComponent {
     return 'Status: bereit.';
   });
 
+  /*  laufOptions = computed(() => {
+      const data = this.jauswertungService.startkartenResource.value();
+      if (!data || !data.runs) return [];
+
+      return data.runs.map(run => ({
+        value: run,
+        label: `Lauf ${run}`
+      }));
+    });*/
+  selectedLauf = signal<string | null>(null);
+
+  // Filter the rows based on the selected run
+  filteredBahnen = computed(() => {
+    const data = this.jauswertungService.startkartenResource.value();
+    const lauf = this.selectedLauf(); // Call it here!
+
+    if (!data || !data.rows || !lauf) return [];
+
+    // 1. Filter for the specific run using the extracted value
+    const runRows = data.rows.filter((row: any) => String(row.Lauf) === String(lauf));
+
+    // 2. Sort by "Bahn"
+    return runRows.sort((a: any, b: any) => Number(a.Bahn) - Number(b.Bahn));
+  });
+
   laufOptions = computed(() => {
     const data = this.jauswertungService.startkartenResource.value();
+    console.log("!!!!!!!!");
+    console.log(data);
     if (!data || !data.runs) return [];
-
+    console.log("REturn data");
     return data.runs.map(run => ({
       value: run,
       label: `Lauf ${run}`
     }));
   });
-  selectedLauf: string | null = null;
 
   maxBahnenText = 'Max. Bahnen: –';
   letzteAktualisierungText = 'Letzte Aktualisierung: –';
 
-  displayedColumns = ['bahn', 'name', 'startnr', 'disziplin', 'taster'];
+  displayedColumns = ['bahn', 'name', 'startnr', 'disziplin']; // , 'taster'
 
   // Use MatTableDataSource for bahnen
   dataSource = new MatTableDataSource<BahnRow>([]);  // Initialized empty

@@ -7,10 +7,31 @@ export interface JAuswertungStartCards {
   row_count: number;
   max_lane: number;
   runs: string[];
+  rows: string[];
   source_url: string;
   last_fetch_ts: number;
   error?: string;
+  startcards_per_run: { [run: string]: StartCard[] };
 }
+
+export interface StartCard {
+  Altersklasse: string;
+  Bahn: string;
+  Bemerkung: string;
+  Disziplin: string;
+  Geschlecht: string;
+  Gliederung: string;
+  Jahrgang: string;
+  Lauf: string;
+  Nachname: string;
+  Name: string;
+  'Q-Gld': string;
+  Runde: string;
+  Startnummer: string;
+  Vorname: string;
+  Wettkampf: string;
+}
+
 
 @Injectable({
   providedIn: 'root'
