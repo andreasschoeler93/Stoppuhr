@@ -8,9 +8,17 @@
     Letzte Aktualisierung: {{ letzteAktualisierung }}
   </div>
 
-  <!-- Use @if to wait for the resource value -->
   @if (systemStatus.value(); as status) {
     <mat-card class="card">
+      <mat-card-header>
+        <mat-card-title>
+          <div class="header">
+            <div class="title">Systemstatus</div>
+            <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
+          </div>
+        </mat-card-title>
+      </mat-card-header>
+      <mat-card-subtitle>Letzte Aktualisierung: {{ letzteAktualisierung }}</mat-card-subtitle>
       <div class="grid">
         <!-- Left column -->
         <div class="col">
