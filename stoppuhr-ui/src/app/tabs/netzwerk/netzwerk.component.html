@@ -7,60 +7,62 @@
           Letzte Aktualisierung: {{ letzteAktualisierung() }}
         </mat-card-subtitle>
       </mat-card-header>
-      <!-- Gateway / DNS -->
-      <div class="top-grid">
-        <div class="kv">
-          <span class="k">Standard-Gateway:</span>
-          <span class="v">{{ n.default_gateway }}</span>
-        </div>
+      <mat-card-content>
+        <div class="top-grid">
+          <div class="kv">
+            <span class="k">Standard-Gateway:</span>
+            <span class="v">{{ n.default_gateway }}</span>
+          </div>
 
-        <div class="kv">
-          <span class="k">DNS-Server:</span>
-          <span class="v">
+          <div class="kv">
+            <span class="k">DNS-Server:</span>
+            <span class="v">
             @for (dns of n.dns_servers; track dns; let last = $last) {
               {{ dns }}@if (!last) {
                 ,
               }
             }
           </span>
-        </div>
-      </div>
-
-      <mat-divider class="divider"></mat-divider>
-
-      <div class="section-title">Schnittstellen:</div>
-
-      <div class="interfaces-container">
-        @for (item of n.interfaces | keyvalue; track item.key) {
-          <div class="iface">
-            <div class="iface-title">
-              <span class="k">{{ item.key }}:</span>
-              <span class="v">{{ item.value.state }}</span>
-            </div>
-
-            <div class="kv">
-              <span class="k">MAC:</span>
-              <span class="v">{{ item.value.mac }}</span>
-            </div>
-            <div class="kv">
-              <span class="k">IPv4:</span>
-              <span class="v">{{ item.value.ipv4 }}</span>
-            </div>
-            <div class="kv">
-              <span class="k">IPv6:</span>
-              <span class="v">{{ item.value.ipv6 }}</span>
-            </div>
           </div>
-        }
-      </div>
+        </div>
 
-      @if (netzwerk.error()) {
-        <div class="error">Konnte Netzwerkstatus nicht laden.</div>
-      }
+        <mat-divider class="divider"></mat-divider>
+
+        <div class="section-title">Schnittstellen:</div>
+
+        <div class="interfaces-container">
+          @for (item of n.interfaces | keyvalue; track item.key) {
+            <div class="iface">
+              <div class="iface-title">
+                <span class="k">{{ item.key }}:</span>
+                <span class="v">{{ item.value.state }}</span>
+              </div>
+
+              <div class="kv">
+                <span class="k">MAC:</span>
+                <span class="v">{{ item.value.mac }}</span>
+              </div>
+              <div class="kv">
+                <span class="k">IPv4:</span>
+                <span class="v">{{ item.value.ipv4 }}</span>
+              </div>
+              <div class="kv">
+                <span class="k">IPv6:</span>
+                <span class="v">{{ item.value.ipv6 }}</span>
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (netzwerk.error()) {
+          <div class="error">Konnte Netzwerkstatus nicht laden.</div>
+        }
+      </mat-card-content>
     </mat-card>
   } @else if (netzwerk.isLoading()) {
     <div class="loading">Lade Netzwerkstatus…</div>
   } @else {
     <div class="empty">Keine Netzwerkdaten verfügbar.</div>
   }
+
 </div>
