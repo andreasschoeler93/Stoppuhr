@@ -1,29 +1,5 @@
-.page {
+.wrap {
   padding-top: 18px;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.title {
-  font-size: 20px;
-  font-weight: 650;
-}
-
-.subtitle {
-  margin-top: 8px;
-  font-size: 13px;
-  color: rgba(0, 0, 0, 0.65);
-}
-
-.card {
-  margin-top: 10px;
-  padding: 14px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: none; // näher am Screenshot (flach)
 }
 
 .grid {

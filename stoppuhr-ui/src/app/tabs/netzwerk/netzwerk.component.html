@@ -1,21 +1,12 @@
 <div class="page">
-  <div class="header">
-    <div>
-      <div class="title">Netzwerkstatus</div>
-    </div>
-
-    <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
-  </div>
-
-  <div class="subtitle">
-    Letzte Aktualisierung: {{ letzteAktualisierung() }}
-    @if (netzwerk.isLoading()) {
-      <span>• lädt…</span>
-    }
-  </div>
-
   @if (netzwerk.value(); as n) {
-    <mat-card class="card">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Netzwerkstatus</mat-card-title>
+        <mat-card-subtitle>
+          Letzte Aktualisierung: {{ letzteAktualisierung() }}
+        </mat-card-subtitle>
+      </mat-card-header>
       <!-- Gateway / DNS -->
       <div class="top-grid">
         <div class="kv">

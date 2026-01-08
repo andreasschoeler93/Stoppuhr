@@ -15,10 +15,9 @@ import {StatusService} from '../../services/status.service';
 export class SystemstatusComponent {
   private statusService = inject(StatusService);
 
-  // Use the resource from the service
-  // In the template, we access it via systemStatus.value()
   systemStatus = this.statusService.systemStatusResource;
 
+  // ToDo: Use signal here.
   get letzteAktualisierung() {
     return new Date().toLocaleString();
   }

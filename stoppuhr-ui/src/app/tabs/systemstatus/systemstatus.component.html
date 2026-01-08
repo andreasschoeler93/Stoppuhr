@@ -1,24 +1,15 @@
-<div class="page">
-  <div class="header">
-    <div class="title">Systemstatus</div>
-    <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
-  </div>
-
-  <div class="subtitle">
-    Letzte Aktualisierung: {{ letzteAktualisierung }}
-  </div>
-
+<div class="wrap">
   @if (systemStatus.value(); as status) {
     <mat-card class="card">
       <mat-card-header>
         <mat-card-title>
-          <div class="header">
-            <div class="title">Systemstatus</div>
-            <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
-          </div>
+          <div>Systemstatus</div>
+          <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
         </mat-card-title>
       </mat-card-header>
-      <mat-card-subtitle>Letzte Aktualisierung: {{ letzteAktualisierung }}</mat-card-subtitle>
+      <mat-card-subtitle>
+        Letzte Aktualisierung: {{ letzteAktualisierung }}
+      </mat-card-subtitle>
       <div class="grid">
         <!-- Left column -->
         <div class="col">
