@@ -34,26 +34,25 @@ redis_store = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
 
 
 class Vital(TypedDict):
-    taster: str
     battery: float
     temp: float
     humidity: float
     ts: int
 
 
-class Trigger(TypedDict):
-    taster: str
+class Taster(TypedDict):
+    name: str
+    mac: str
     ts: int
     stopwatch_ms: Optional[int]
-    run_id: Optional[str]
 
 
 class State(TypedDict):
     settings: dict[str, str]
     startcards: dict[str, Any]
-    tasters: dict[str, Any]
-    vitals: list[dict[str, Any]]
-    triggers: list[Trigger]
+    tasters: list[Taster]
+    # triggers: list[Trigger]
+    vitals: dict[str, Vital]
     runs: dict[str, Any]
     assignments: dict[str, Any]
     startcards_per_run: dict[str, list[dict[str, Any]]]
@@ -73,14 +72,13 @@ def _default_state() -> State:
             "last_error": None,
             "url": None,
         },
-        "tasters": {
-            "items": [],
-            "last_refresh_ts": None,
-        },
+        "tasters": [
+            {"name": "A", "mac": "AA:BB:CC:DD:EE:00", "ts": 0, "stopwatch_ms": None},
+            {"name": "B", "mac": "AA:BB:CC:DD:EE:01", "ts": 0, "stopwatch_ms": None},
+        ],
         "runs": {"current_run": None, "runs": []},
         "assignments": {"mapping": {}, "last_update_ts": None},
-        "vitals": [],
-        "triggers": [],
+        "vitals": {},  # Maps the mac address to the vitals
         "startcards_per_run": defaultdict(list),
     }
 
@@ -156,6 +154,37 @@ def api_get_assignments():
     return jsonify(st["assignments"])
 
 
+@app.get("/api/mapping")
+def get_mapping():
+    st = load_state()
+    max_lane = st.get("startcards", {}).get("max_lane", 0)
+    current_mapping = st.get("assignments", {}).get("mapping", {})
+
+    tasters = st.get("tasters", [])
+    # Create a complete mapping for all lanes from 1 to max_lane
+    full_mapping = {str(lane): current_mapping.get(str(lane)) for lane in range(1, max_lane + 1)}
+
+    # Get the set of MAC addresses that are already assigned to a lane
+    mapped_macs = set(current_mapping.values())
+    # Filter tasters whose MAC is not in the mapped_macs set
+    unmapped_tasters = [t for t in tasters if t.get("mac") not in mapped_macs]
+
+    return jsonify({"mapping": full_mapping, "unmapped_taster": unmapped_tasters})
+
+
+@app.get("/api/assignments/mapping")
+def get_mapping_endpoint():
+    """Returns the mapping for all available lanes based on max_lane."""
+    st = load_state()
+    max_lane = st.get("startcards", {}).get("max_lane", 0)
+    current_mapping = st.get("assignments", {}).get("mapping", {})
+
+    # Create a complete mapping for all lanes from 1 to max_lane
+    full_mapping = {str(lane): current_mapping.get(str(lane)) for lane in range(1, max_lane + 1)}
+
+    return jsonify({"ok": True, "max_lane": max_lane, "mapping": full_mapping})
+
+
 @app.post("/api/assignments")
 def api_post_assignments():
     st = load_state()
@@ -175,44 +204,49 @@ def api_get_vitals():
 
 @app.post("/api/vitals")
 def api_post_vitals():
+    """Update Vitals from specified MAC address."""
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
-    entry = {}
-    for k in ("taster", "battery", "temp", "humidity"):
-        if k in payload:
-            entry[k] = payload[k]
-    entry["ts"] = int(payload.get("ts", now_ms()))
-    st["vitals"].append(entry)
+    mac = payload.get("mac")
+    if not mac:
+        return jsonify({"ok": False, "error": "missing mac"}), 400
+    new_vital: Vital = {
+        "battery": payload.get("battery"),
+        "temp": payload.get("temp"),
+        "humidity": payload.get("humidity"),
+        "ts": int(payload.get("ts", now_ms())),
+    }
+    st["vitals"][mac] = new_vital
     save_state(st)
-    return jsonify({"ok": True, "vital": entry})
+    return jsonify({"ok": True, "vital": new_vital})
 
 
-@app.get("/api/triggers")
-def api_get_triggers():
-    st = load_state()
-    return jsonify(st["triggers"])
+@app.get("/api/taster")
+def api_get_taster():
+    return jsonify({"tasters": load_state()["tasters"]})
 
 
-@app.post("/api/triggers")
-def api_post_triggers():
+@app.post("/api/taster")
+def api_post_taster():
+    """Register einen Taster"""
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
-    taster = payload.get("taster")
-    if not taster:
-        return jsonify({"ok": False, "error": "missing taster"}), 400
-    entry: Trigger = {
-        "taster": str(taster),
+    mac = payload.get("mac")
+    if not mac:
+        return jsonify({"ok": False, "error": "missing mac"}), 400
+    name = payload.get("name")
+    if not name:
+        return jsonify({"ok": False, "error": "missing name"}), 400
+    entry: Taster = {
+        "mac": str(mac),
+        "name": str(name),
         "ts": int(payload.get("ts", now_ms())),
         "stopwatch_ms": payload.get("stopwatch_ms"),
-        "run_id": payload.get("run_id"),
     }
-    st["triggers"].append(entry)
-    # backward compatibility: keep tasters.items
-    if "tasters" not in st:
-        st["tasters"] = {"items": [], "last_refresh_ts": None}
-    st["tasters"]["items"].append({"taster": entry["taster"], "ts": entry["ts"]})
+    st["tasters"].append(entry)
+
     save_state(st)
-    return jsonify({"ok": True, "trigger": entry})
+    return jsonify({"ok": True, "taster": entry})
 
 
 @app.get("/api/startcards")
@@ -263,7 +297,6 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
         f = io.StringIO(text_csv.strip())
 
         # 2. Use DictReader with semicolon delimiter
-        # quotechar='"' handles the double quotes around your values automatically
         reader = csv.DictReader(f, delimiter=";", quotechar='"')
 
         startcards = []
@@ -333,48 +366,6 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
         return jsonify(
             {"ok": False, "error": state["startcards"]["last_error"], "source_url": url}
         ), 500
-
-
-@app.get("/api/taster-list")
-def api_taster_list():
-    """v0.4.1: Demo/Stub."""
-    st = load_state()
-    tasters = st.get("tasters", {})
-    items = tasters.get("items", [])
-
-    if not items:
-        demo = []
-        for i, letter in enumerate(["A", "B", "C", "D", "E"]):
-            demo.append(
-                {
-                    "mac": f"AA:BB:CC:DD:EE:{i:02X}",
-                    "letter": letter,
-                    "role": "bahn",
-                    "lane": i + 1,
-                    "last_seen_ms": now_ms() - (i * 12000),
-                    "last_event_type": "heartbeat",
-                    "last_battery_percent": 90 - i * 5,
-                    "last_rssi_dbm": -50 - i * 3,
-                    "last_temp_c": 25.0 + i * 0.2,
-                    "last_humidity_rel": 55.0 + i * 0.5,
-                    "time_correction_ms": 0,
-                    "diff_thresholds_ms": {"ok": 200, "warn": 500},
-                    "start_finish_combo": False,
-                }
-            )
-        items = demo
-        tasters["items"] = items
-        tasters["last_refresh_ts"] = now_ms()
-        st["tasters"] = tasters
-        save_state(st)
-
-    return jsonify(
-        {
-            "ok": True,
-            "tasters": items,
-            "last_refresh_ts": tasters.get("last_refresh_ts"),
-        }
-    )
 
 
 @app.get("/api/system-status")
