@@ -12,6 +12,13 @@
   align-items: start;
 }
 
+.grid-mapping {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
 .w-100 {
   width: 100%;
 }

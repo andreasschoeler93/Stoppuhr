@@ -53,44 +53,113 @@
       <span>{{ statusText() }}</span>
     </mat-card-content>
   </mat-card>
+  <div class="grid-mapping">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>
+          Bahnen
+        </mat-card-title>
+      </mat-card-header>
+      <mat-card-subtitle style="margin-left:auto">{{ maxBahnenText() }}</mat-card-subtitle>
 
-  <mat-card>
-    <mat-card-header>
-      <mat-card-title>
-        Bahnen
-      </mat-card-title>
-    </mat-card-header>
-    <mat-card-subtitle style="margin-left:auto">{{ maxBahnenText() }}</mat-card-subtitle>
+      <table mat-table [dataSource]="filteredBahnen()" class="mat-elevation-z2 w-100">
+        <!-- Bahn Column -->
+        <ng-container matColumnDef="bahn">
+          <th mat-header-cell *matHeaderCellDef>Bahn</th>
+          <td mat-cell *matCellDef="let row">{{ row.Bahn }}</td>
+        </ng-container>
 
-    <table mat-table [dataSource]="filteredBahnen()" class="mat-elevation-z2 w-100">
-      <!-- Bahn Column -->
-      <ng-container matColumnDef="bahn">
-        <th mat-header-cell *matHeaderCellDef>Bahn</th>
-        <td mat-cell *matCellDef="let row">{{ row.Bahn }}</td>
-      </ng-container>
+        <!-- Name Column -->
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Name</th>
+          <td mat-cell *matCellDef="let row">{{ row.Vorname }} {{ row.Nachname }}</td>
+        </ng-container>
 
-      <!-- Name Column -->
-      <ng-container matColumnDef="name">
-        <th mat-header-cell *matHeaderCellDef>Name</th>
-        <td mat-cell *matCellDef="let row">{{ row.Vorname }} {{ row.Nachname }}</td>
-      </ng-container>
+        <!-- Startnr Column -->
+        <ng-container matColumnDef="startnr">
+          <th mat-header-cell *matHeaderCellDef>Startnr.</th>
+          <td mat-cell *matCellDef="let row">{{ row.Startnummer }}</td>
+        </ng-container>
 
-      <!-- Startnr Column -->
-      <ng-container matColumnDef="startnr">
-        <th mat-header-cell *matHeaderCellDef>Startnr.</th>
-        <td mat-cell *matCellDef="let row">{{ row.Startnummer }}</td>
-      </ng-container>
+        <!-- Disziplin Column -->
+        <ng-container matColumnDef="disziplin">
+          <th mat-header-cell *matHeaderCellDef>Disziplin</th>
+          <td mat-cell *matCellDef="let row">{{ row.Disziplin }}</td>
+        </ng-container>
 
-      <!-- Disziplin Column -->
-      <ng-container matColumnDef="disziplin">
-        <th mat-header-cell *matHeaderCellDef>Disziplin</th>
-        <td mat-cell *matCellDef="let row">{{ row.Disziplin }}</td>
-      </ng-container>
+        <ng-container matColumnDef="taster">
+          <th mat-header-cell *matHeaderCellDef> Taster</th>
+          <td mat-cell *matCellDef="let element">
+            @if (element.assignedMac) {
+              <span class="taster-name-label">
+              {{ allTastersMap().get(element.assignedMac)?.name || 'Geladen' }}
+            </span>
+            } @else {
+              <span class="muted-text small italic">kein Taster</span>
+            }
+          </td>
+        </ng-container>
 
-      <!-- Header definition -->
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-    </table>
-  </mat-card>
+        <!-- Header definition -->
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
 
+
+    </mat-card>
+
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Mapping</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="mapping-overview-section" style="margin-top: 3rem;">
+          <div class="mapping-grid"
+               style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
+
+            <!-- List all Lanes from the mapping response -->
+            @let mappingData = tasterService.mappingResource.value();
+            @if (mappingData) {
+              @for (laneEntry of mappingData.mapping | keyvalue; track laneEntry.key) {
+                <div class="lane-status-card">
+                  @let mac = laneEntry.value;
+                  @if (mac) {
+                    @let taster = allTastersMap().get(mac);
+                    <app-taster-card
+                      [title]="taster?.name || 'Taster'"
+                      [detail]="mac"
+                      [vitals]="taster?.vitals"
+                      [badgeText]="'BAHN ' + laneEntry.key + ' AKTIV'"
+                      badgeVariant="active">
+                    </app-taster-card>
+                  } @else {
+                    <app-taster-card
+                      [title]="'Bahn ' + laneEntry.key"
+                      [detail]="'Nicht belegt'"
+                      [badgeText]="'LEER'"
+                      badgeVariant="inactive">
+                    </app-taster-card>
+                  }
+                </div>
+              }
+            }
+          </div>
+
+          <h3 style="margin-top: 2rem;">Verfügbare Taster</h3>
+          <div class="available-tasters-grid" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            @for (taster of mappingData?.unmapped_taster; track taster.mac) {
+              <app-taster-card
+                [title]="taster.name"
+                [detail]="taster.mac"
+                [badgeText]="'BEREIT'"
+                badgeVariant="default">
+              </app-taster-card>
+            } @empty {
+              <p class="muted-text">Keine ungenutzten Taster gefunden.</p>
+            }
+          </div>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
 </div>

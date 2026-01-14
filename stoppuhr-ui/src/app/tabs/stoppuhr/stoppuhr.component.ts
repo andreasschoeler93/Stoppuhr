@@ -10,6 +10,8 @@ import {MatButtonModule} from '@angular/material/button';
 import {MatSelectModule} from '@angular/material/select';
 import {StatusService} from '../../services/status.service';
 import {JAuswertungService} from '../../services/jauswertung.service';
+import {TasterService} from '../../services/taster.service';
+import {TasterCardComponent} from '../../component/taster-card/taster-card.component';
 
 @Component({
   selector: 'app-stoppuhr',
@@ -22,7 +24,7 @@ import {JAuswertungService} from '../../services/jauswertung.service';
     MatButtonModule,
     MatSelectModule,
     MatTableModule,
-    DragDropModule,
+    DragDropModule, TasterCardComponent,
   ],
   templateUrl: './stoppuhr.component.html',
   styleUrls: ['./stoppuhr.component.scss'],
@@ -31,7 +33,28 @@ export class StoppuhrComponent {
 
   private statusService = inject(StatusService);
   protected jauswertungService = inject(JAuswertungService);
+  protected tasterService = inject(TasterService)
   public runs: string[] = [];
+
+  /**
+   * Helper to look up taster info + vitals by MAC
+   */
+  allTastersMap = computed(() => {
+    const data = this.tasterService.mappingResource.value();
+    // Assuming statusService has a resource for vitals mapping mac -> vitals
+    const vitalsData = this.statusService.systemStatusResource.value(); // Adjust if vitals are elsewhere
+
+    const tasterMap = new Map<string, any>();
+    if (!data) return tasterMap;
+
+    // Build map from unmapped list (primary source for taster metadata)
+    data.unmapped_taster.forEach(t => {
+      // In a real scenario, you'd merge vitals from your vitals endpoint here
+      tasterMap.set(t.mac, {...t, vitals: null});
+    });
+
+    return tasterMap;
+  });
 
   fullUrl = computed(() => {
     const s = this.statusService.settingsResource.value();
@@ -58,33 +81,35 @@ export class StoppuhrComponent {
   // Filter the rows based on the selected run
   filteredBahnen = computed(() => {
     const data = this.jauswertungService.startkartenResource.value();
+    const mappingData = this.tasterService.mappingResource.value(); // Get the current mapping
     const lauf = this.selectedLauf();
 
     if (!data || !data.rows || !lauf) return [];
 
-    // 1. Alle Zeilen des gewählten Laufs holen
     const runRows = data.rows.filter((row: any) => String(row.Lauf) === String(lauf));
-
-    // 2. Erzeuge ein Array von 1 bis max_lane
     const maxLane = data.max_lane || 0;
     const result = [];
 
     for (let b = 1; b <= maxLane; b++) {
-      // Prüfen, ob für diese Bahn ein Starter existiert
       const starter = runRows.find((r: any) => Number(r.Bahn) === b);
+      // Find if there is a taster assigned to this lane MAC address
+      const assignedMac = mappingData?.mapping?.[String(b)];
 
-      if (starter) {
-        result.push(starter);
-      } else {
-        // Leeren Eintrag für die Bahn erzeugen
-        result.push({
-          Bahn: b,
-          Vorname: '-',
-          Nachname: '',
-          Startnummer: '-',
-          Disziplin: '-'
-        });
-      }
+      // @ts-ignore
+      //TdDo: What is this?
+      const baseInfo = starter ? {...starter} : {
+        Bahn: b,
+        Vorname: '-',
+        Nachname: '',
+        Startnummer: '-',
+        Disziplin: '-'
+      };
+
+      // Attach the assigned MAC to the row object for the template
+      result.push({
+        ...baseInfo,
+        assignedMac: assignedMac || null
+      });
     }
 
     return result;
@@ -107,7 +132,7 @@ export class StoppuhrComponent {
     return `Max. Bahnen: ${data.max_lane}`;
   });
 
-  displayedColumns = ['bahn', 'name', 'startnr', 'disziplin']; // , 'taster'
+  displayedColumns = ['bahn', 'name', 'startnr', 'disziplin', 'taster'];
 
 
   loadStartkarten() {

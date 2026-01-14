@@ -1,0 +1,19 @@
+<div class="card">
+  <div class="top">
+    <div class="title">{{ title }}</div>
+
+    <mat-chip
+      *ngIf="badgeText"
+      class="badge"
+      [class.active]="badgeVariant === 'active'"
+      [class.inactive]="badgeVariant === 'inactive'"
+      selected
+    >
+      {{ badgeText }}
+    </mat-chip>
+  </div>
+
+  <div class="detail" *ngIf="detail">{{ detail }}</div>
+
+  <div class="vitals" *ngIf="vitalsText">{{ vitalsText }}</div>
+</div>
