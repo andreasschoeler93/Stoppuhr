@@ -143,6 +143,7 @@ export class StoppuhrComponent {
     this.tasterService.assignTasterToLane(mac, lane).subscribe({
       next: () => {
         this.tasterService.reload();
+        this.selectedTasterForAssignment.set(null); // Clear selection so it can't be clicked elsewhere
       },
       error: (err) => console.error('Assignment failed', err)
     });
