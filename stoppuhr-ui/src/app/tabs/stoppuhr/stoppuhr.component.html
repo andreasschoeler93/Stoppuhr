@@ -66,36 +66,36 @@
         <!-- Bahn Column -->
         <ng-container matColumnDef="bahn">
           <th mat-header-cell *matHeaderCellDef>Bahn</th>
-          <td mat-cell *matCellDef="let row">{{ row.Bahn }}</td>
+          <td mat-cell *matCellDef="let row">{{ row.startcard.Bahn }}</td>
         </ng-container>
 
         <!-- Name Column -->
         <ng-container matColumnDef="name">
           <th mat-header-cell *matHeaderCellDef>Name</th>
-          <td mat-cell *matCellDef="let row">{{ row.Vorname }} {{ row.Nachname }}</td>
+          <td mat-cell *matCellDef="let row">{{ row.startcard.Vorname }} {{ row.startcard.Nachname }}</td>
         </ng-container>
 
         <!-- Startnr Column -->
         <ng-container matColumnDef="startnr">
           <th mat-header-cell *matHeaderCellDef>Startnr.</th>
-          <td mat-cell *matCellDef="let row">{{ row.Startnummer }}</td>
+          <td mat-cell *matCellDef="let row">{{ row.startcard.Startnummer }}</td>
         </ng-container>
 
         <!-- Disziplin Column -->
         <ng-container matColumnDef="disziplin">
           <th mat-header-cell *matHeaderCellDef>Disziplin</th>
-          <td mat-cell *matCellDef="let row">{{ row.Disziplin }}</td>
+          <td mat-cell *matCellDef="let row">{{ row.startcard.Disziplin }}</td>
         </ng-container>
 
         <ng-container matColumnDef="taster">
           <th mat-header-cell *matHeaderCellDef> Taster</th>
           <td mat-cell *matCellDef="let element">
-            @if (element.assignedMac) {
+            @if (element.assignedTaster) {
               <span class="taster-name-label">
-              {{ allTastersMap().get(element.assignedMac)?.name || 'Geladen' }}
+                {{ (element.assignedTaster)?.name || 'Keinen Namen' }}
             </span>
             } @else {
-              <span class="muted-text small italic">kein Taster</span>
+              <span class="muted-text small italic">Kein Taster</span>
             }
           </td>
         </ng-container>

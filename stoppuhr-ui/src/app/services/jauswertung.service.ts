@@ -7,7 +7,7 @@ export interface JAuswertungStartCards {
   row_count: number;
   max_lane: number;
   runs: string[];
-  rows: string[];
+  rows: StartCard[];
   source_url: string;
   last_fetch_ts: number;
   error?: string;

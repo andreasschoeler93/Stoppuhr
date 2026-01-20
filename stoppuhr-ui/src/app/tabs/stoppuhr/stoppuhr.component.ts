@@ -53,18 +53,7 @@ export class StoppuhrComponent {
         }
       });
     }
-
     return tasterMap;
-    /*    console.log("!!!!!!");
-        console.log(data);
-        // Build map from unmapped list (primary source for taster metadata)
-        data.unmapped_taster.forEach(t => {
-          // In a real scenario, you'd merge vitals from your vitals endpoint here
-          tasterMap.set(t.mac, {...t, vitals: null});
-        });
-        console.log("???????");
-        console.log(tasterMap);
-        return tasterMap;*/
   });
 
   fullUrl = computed(() => {
@@ -103,13 +92,12 @@ export class StoppuhrComponent {
     const result = [];
 
     for (let b = 1; b <= maxLane; b++) {
-      const starter = runRows.find((r: any) => Number(r.Bahn) === b);
+      const startcard = runRows.find((r: any) => Number(r.Bahn) === b);
       // Find if there is a taster assigned to this lane MAC address
-      const assignedMac = mappingData?.mapping?.[String(b)];
+      const assignedTaster = mappingData?.mapping?.[String(b)];
 
-      // @ts-ignore
-      //TdDo: What is this?
-      const baseInfo = starter ? {...starter} : {
+
+      const baseStartCard = startcard ? {...startcard} : {
         Bahn: b,
         Vorname: '-',
         Nachname: '',
@@ -117,13 +105,12 @@ export class StoppuhrComponent {
         Disziplin: '-'
       };
 
-      // Attach the assigned MAC to the row object for the template
+      // Combine the startcard with the assigned taster
       result.push({
-        ...baseInfo,
-        assignedMac: assignedMac || null
+        startcard: baseStartCard,
+        assignedTaster: assignedTaster || null
       });
     }
-
     return result;
   });
 
