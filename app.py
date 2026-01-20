@@ -161,8 +161,12 @@ def get_mapping():
     current_mapping = st.get("assignments", {}).get("mapping", {})
 
     tasters = st.get("tasters", [])
+    mac_to_taster = {t.get("mac"): t for t in tasters}
     # Create a complete mapping for all lanes from 1 to max_lane
-    full_mapping = {str(lane): current_mapping.get(str(lane)) for lane in range(1, max_lane + 1)}
+    full_mapping = {
+        str(lane): mac_to_taster.get(current_mapping.get(str(lane)))
+        for lane in range(1, max_lane + 1)
+    }
 
     # Get the set of MAC addresses that are already assigned to a lane
     mapped_macs = set(current_mapping.values())
@@ -194,6 +198,55 @@ def api_post_assignments():
         st["assignments"]["last_update_ts"] = now_ms()
         save_state(st)
     return jsonify({"ok": True, "assignments": st["assignments"]})
+
+
+@app.post("/api/unassign")
+def api_post_unassign():
+    """Removes any MAC address assignment from a specific lane."""
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    lane = payload.get("lane")
+
+    if not lane:
+        return jsonify({"ok": False, "error": "missing lane"}), 400
+
+    lane_key = str(lane)
+    current_mapping = st["assignments"]["mapping"]
+
+    if lane_key in current_mapping:
+        del current_mapping[lane_key]
+        st["assignments"]["last_update_ts"] = now_ms()
+        save_state(st)
+        return jsonify({"ok": True, "mapping": current_mapping})
+
+    return jsonify({"ok": True, "message": "lane was not assigned"})
+
+
+@app.post("/api/assign")
+def api_post_assign():
+    """Assigns a MAC address to a specific lane."""
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    mac = payload.get("mac")
+    lane = payload.get("lane")
+
+    if not mac or not lane:
+        return jsonify({"ok": False, "error": "missing mac or lane"}), 400
+
+    lane_key = str(lane)
+
+    # Remove this MAC from any other lanes it might be assigned to
+    current_mapping = st["assignments"]["mapping"]
+    for lane, m in list(current_mapping.items()):
+        if m == mac:
+            del current_mapping[lane]
+
+    # Assign the new MAC to the lane
+    current_mapping[lane_key] = mac
+    st["assignments"]["last_update_ts"] = now_ms()
+
+    save_state(st)
+    return jsonify({"ok": True, "mapping": current_mapping})
 
 
 @app.get("/api/vitals")
