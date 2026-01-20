@@ -113,10 +113,11 @@
         <mat-card-title>Mapping</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <div style="margin-top: 3rem;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
 
             <!-- List all Lanes from the mapping response -->
+            <h3>Verfügbare Bahnen</h3>
             @let mappingData = tasterService.mappingResource.value();
             @if (mappingData) {
               @for (laneEntry of mappingData.mapping | keyvalue; track laneEntry.key) {
@@ -144,18 +145,19 @@
               }
             }
           </div>
-
-          <h3 style="margin-top: 2rem;">Verfügbare Taster</h3>
-          <div class="available-tasters-grid" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            @for (taster of mappingData?.unmapped_taster; track taster.mac) {
-              <app-taster-card
-                [title]="taster.name"
-                [detail]="taster.mac"
-                [badgeText]="selectedTasterForAssignment() === taster.mac ? 'AUSGEWÄHLT' : 'BEREIT'"
-                [badgeVariant]="selectedTasterForAssignment() === taster.mac ? 'active' : 'default'"
-                (click)="selectedTasterForAssignment.set(taster.mac)">
-              </app-taster-card>
-            }
+          <div>
+            <h3>Verfügbare Taster</h3>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              @for (taster of mappingData?.unmapped_taster; track taster.mac) {
+                <app-taster-card
+                  [title]="taster.name"
+                  [detail]="taster.mac"
+                  [badgeText]="selectedTasterForAssignment() === taster.mac ? 'AUSGEWÄHLT' : 'BEREIT'"
+                  [badgeVariant]="selectedTasterForAssignment() === taster.mac ? 'active' : 'default'"
+                  (click)="selectedTasterForAssignment.set(taster.mac)">
+                </app-taster-card>
+              }
+            </div>
           </div>
         </div>
       </mat-card-content>
