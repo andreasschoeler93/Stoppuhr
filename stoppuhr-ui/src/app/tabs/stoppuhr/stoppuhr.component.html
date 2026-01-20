@@ -113,9 +113,8 @@
         <mat-card-title>Mapping</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <div class="mapping-overview-section" style="margin-top: 3rem;">
-          <div class="mapping-grid"
-               style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
+        <div style="margin-top: 3rem;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
 
             <!-- List all Lanes from the mapping response -->
             @let mappingData = tasterService.mappingResource.value();
@@ -157,8 +156,6 @@
                 (click)="selectedTasterForAssignment.set(taster.mac)">
               </app-taster-card>
             }
-
-
           </div>
         </div>
       </mat-card-content>
