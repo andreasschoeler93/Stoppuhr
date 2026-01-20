@@ -75,6 +75,10 @@ def _default_state() -> State:
         "tasters": [
             {"name": "A", "mac": "AA:BB:CC:DD:EE:00", "ts": 0, "stopwatch_ms": None},
             {"name": "B", "mac": "AA:BB:CC:DD:EE:01", "ts": 0, "stopwatch_ms": None},
+            {"name": "C", "mac": "AA:BB:CC:DD:EE:02", "ts": 0, "stopwatch_ms": None},
+            {"name": "D", "mac": "AA:BB:CC:DD:EE:03", "ts": 0, "stopwatch_ms": None},
+            {"name": "E", "mac": "AA:BB:CC:DD:EE:04", "ts": 0, "stopwatch_ms": None},
+            {"name": "F", "mac": "AA:BB:CC:DD:EE:05", "ts": 0, "stopwatch_ms": None},
         ],
         "runs": {"current_run": None, "runs": []},
         "assignments": {"mapping": {}, "last_update_ts": None},
