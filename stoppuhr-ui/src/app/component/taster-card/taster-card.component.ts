@@ -1,4 +1,4 @@
-import {Component, Input} from '@angular/core';
+import {Component, EventEmitter, Input, Output} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {MatChipsModule} from '@angular/material/chips';
 
@@ -17,6 +17,8 @@ export interface TasterVitals {
 export class TasterCardComponent {
   /** Title (left) like "Taster A" */
   @Input({required: true}) title!: string;
+
+  @Output() cardClick = new EventEmitter<void>();
 
   /** Optional subtitle line (e.g. "AABB:CC:DD:EE:00") */
   @Input() detail?: string;

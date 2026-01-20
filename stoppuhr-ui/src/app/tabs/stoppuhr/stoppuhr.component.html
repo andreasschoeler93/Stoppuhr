@@ -122,22 +122,23 @@
             @if (mappingData) {
               @for (laneEntry of mappingData.mapping | keyvalue; track laneEntry.key) {
                 <div class="lane-status-card">
-                  @let mac = laneEntry.value;
-                  @if (mac) {
-                    @let taster = allTastersMap().get(mac);
+                  @let taster = laneEntry.value;
+                  @if (taster) {
                     <app-taster-card
-                      [title]="taster?.name || 'Taster'"
-                      [detail]="mac"
-                      [vitals]="taster?.vitals"
+                      [title]="'Taster ' + taster?.name || 'Taster'"
+                      [detail]="taster?.mac || 'Nicht belegt'"
+                      [vitals]=undefined
                       [badgeText]="'BAHN ' + laneEntry.key + ' AKTIV'"
-                      badgeVariant="active">
+                      badgeVariant="active"
+                      (click)="removeTasterFromLane(laneEntry.key.toString())">
                     </app-taster-card>
                   } @else {
                     <app-taster-card
                       [title]="'Bahn ' + laneEntry.key"
                       [detail]="'Nicht belegt'"
-                      [badgeText]="'LEER'"
-                      badgeVariant="inactive">
+                      [badgeText]="selectedTasterForAssignment() ? 'HIERHER ZUWEISEN' : 'LEER'"
+                      [badgeVariant]="selectedTasterForAssignment() ? 'default' : 'inactive'"
+                      (click)="selectedTasterForAssignment() ? assignTaster(selectedTasterForAssignment()!, laneEntry.key.toString()) : null">
                     </app-taster-card>
                   }
                 </div>
@@ -151,12 +152,13 @@
               <app-taster-card
                 [title]="taster.name"
                 [detail]="taster.mac"
-                [badgeText]="'BEREIT'"
-                badgeVariant="default">
+                [badgeText]="selectedTasterForAssignment() === taster.mac ? 'AUSGEWÄHLT' : 'BEREIT'"
+                [badgeVariant]="selectedTasterForAssignment() === taster.mac ? 'active' : 'default'"
+                (click)="selectedTasterForAssignment.set(taster.mac)">
               </app-taster-card>
-            } @empty {
-              <p class="muted-text">Keine ungenutzten Taster gefunden.</p>
             }
+
+
           </div>
         </div>
       </mat-card-content>

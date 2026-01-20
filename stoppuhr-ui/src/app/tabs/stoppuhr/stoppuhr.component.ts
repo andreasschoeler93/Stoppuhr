@@ -1,5 +1,5 @@
 import {Component, computed, inject, signal} from '@angular/core';
-import {CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem} from '@angular/cdk/drag-drop';
+import {DragDropModule} from '@angular/cdk/drag-drop';
 import {CommonModule} from '@angular/common';
 import {MatCardModule} from '@angular/material/card';
 import {MatTableModule} from '@angular/material/table';
@@ -46,14 +46,25 @@ export class StoppuhrComponent {
 
     const tasterMap = new Map<string, any>();
     if (!data) return tasterMap;
-
-    // Build map from unmapped list (primary source for taster metadata)
-    data.unmapped_taster.forEach(t => {
-      // In a real scenario, you'd merge vitals from your vitals endpoint here
-      tasterMap.set(t.mac, {...t, vitals: null});
-    });
+    if (data.mapping) {
+      Object.entries(data.mapping).forEach(([lane, taster]) => {
+        if (taster && !tasterMap.has(taster.mac)) {
+          tasterMap.set(taster.mac, taster);
+        }
+      });
+    }
 
     return tasterMap;
+    /*    console.log("!!!!!!");
+        console.log(data);
+        // Build map from unmapped list (primary source for taster metadata)
+        data.unmapped_taster.forEach(t => {
+          // In a real scenario, you'd merge vitals from your vitals endpoint here
+          tasterMap.set(t.mac, {...t, vitals: null});
+        });
+        console.log("???????");
+        console.log(tasterMap);
+        return tasterMap;*/
   });
 
   fullUrl = computed(() => {
@@ -77,6 +88,7 @@ export class StoppuhrComponent {
 
 
   selectedLauf = signal<string | null>(null);
+  selectedTasterForAssignment = signal<string | null>(null);
 
   // Filter the rows based on the selected run
   filteredBahnen = computed(() => {
@@ -140,17 +152,21 @@ export class StoppuhrComponent {
 
   }
 
-
-  dropTaster(event: CdkDragDrop<string[]>) {
-    if (event.previousContainer === event.container) {
-      moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
-      return;
-    }
-    transferArrayItem(
-      event.previousContainer.data,
-      event.container.data,
-      event.previousIndex,
-      event.currentIndex
-    );
+  assignTaster(mac: string, lane: string) {
+    this.tasterService.assignTasterToLane(mac, lane).subscribe({
+      next: () => {
+        this.tasterService.reload();
+      },
+      error: (err) => console.error('Assignment failed', err)
+    });
   }
+
+  removeTasterFromLane(lane: string) {
+    this.tasterService.unassignTaster(lane).subscribe({
+      next: () => this.tasterService.reload(),
+      error: (err) => console.error('Unassignment failed', err)
+    });
+  }
+
+
 }

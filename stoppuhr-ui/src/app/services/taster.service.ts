@@ -10,7 +10,7 @@ export interface Taster {
 }
 
 export interface MappingResponse {
-  mapping: { [lane: string]: string | null }; // Lane number -> MAC address
+  mapping: { [lane: string]: Taster | null }; // Lane number -> MAC address
   unmapped_taster: Taster[];
 }
 
@@ -45,5 +45,20 @@ export class TasterService {
    */
   reload() {
     this.mappingResource.reload();
+  }
+
+  /**
+   * Assigns a specific Taster (MAC) to a Lane
+   */
+  assignTasterToLane(mac: string, lane: string) {
+    return this.http.post<PostTasterResponse>('/api/assign', {mac, lane});
+  }
+
+  /**
+   * Removes any Taster assignment from a specific Lane
+   */
+  unassignTaster(lane: string) {
+    // Assuming the API expects an empty mac or has a dedicated delete/unassign route
+    return this.http.post<PostTasterResponse>('/api/unassign', {lane});
   }
 }
