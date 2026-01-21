@@ -6,10 +6,10 @@
           Systemstatus
           <button mat-stroked-button (click)="refresh()">Aktualisieren</button>
         </mat-card-title>
+        <mat-card-subtitle>
+          Letzte Aktualisierung: {{ letzteAktualisierung }}
+        </mat-card-subtitle>
       </mat-card-header>
-      <mat-card-subtitle>
-        Letzte Aktualisierung: {{ letzteAktualisierung }}
-      </mat-card-subtitle>
       <mat-card-content>
         <div class="grid">
           <!-- Left column -->
