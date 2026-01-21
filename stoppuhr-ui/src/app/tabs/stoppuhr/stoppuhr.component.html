@@ -121,7 +121,7 @@
             @let mappingData = tasterService.mappingResource.value();
             @if (mappingData) {
               @for (laneEntry of mappingData.mapping | keyvalue; track laneEntry.key) {
-                <div class="lane-status-card">
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                   @let taster = laneEntry.value;
                   @if (taster) {
                     <app-taster-card
@@ -145,12 +145,12 @@
               }
             }
           </div>
-          <div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
             <h3>Verfügbare Taster</h3>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; flex-shrink: 0;">
               @for (taster of mappingData?.unmapped_taster; track taster.mac) {
                 <app-taster-card
-                  [title]="taster.name"
+                  [title]="'Taster ' + taster?.name || 'Taster'"
                   [detail]="taster.mac"
                   [badgeText]="selectedTasterForAssignment() === taster.mac ? 'AUSGEWÄHLT' : 'BEREIT'"
                   [badgeVariant]="selectedTasterForAssignment() === taster.mac ? 'active' : 'default'"
