@@ -5,6 +5,7 @@
     <mat-chip
       *ngIf="badgeText"
       class="badge"
+      [disabled]="badgeVariant === 'inactive'"
       [class.active]="badgeVariant === 'active'"
       [class.inactive]="badgeVariant === 'inactive'"
     >
