@@ -20,6 +20,7 @@ export interface SystemStatus {
     used: number;
   };
   load_avg: number[];
+  cores: number;
   dienst: string;
 }
 

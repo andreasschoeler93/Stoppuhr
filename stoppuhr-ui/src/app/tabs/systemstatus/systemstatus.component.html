@@ -50,11 +50,12 @@
             </div>
 
             <div class="row">
-              <span class="k">Load:</span>
+              <span class="k">Load (1m / 5m / 15m):</span>
               <span class="v">
-              {{ status.load_avg[0] | number:'1.2-2' }} /
-                {{ status.load_avg[1] | number:'1.2-2' }} /
-                {{ status.load_avg[2] | number:'1.2-2' }}
+                {{ status.load_avg[0] | number:'1.2-2' }} % /
+                {{ status.load_avg[1] | number:'1.2-2' }} %/
+                {{ status.load_avg[2] | number:'1.2-2' }} %
+                bei {{ status.cores }} Kernen
             </span>
             </div>
           </div>

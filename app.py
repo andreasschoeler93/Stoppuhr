@@ -428,7 +428,8 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
 @app.get("/api/system-status")
 def api_system_status():
     hostname = socket.gethostname()
-    loadavg = os.getloadavg() if hasattr(os, "getloadavg") else (0.0, 0.0, 0.0)
+    loadavg = os.getloadavg()
+    cores = os.cpu_count()
 
     cpu_percent = psutil.cpu_percent(interval=None)
 
@@ -451,7 +452,12 @@ def api_system_status():
     return jsonify(
         {
             "hostname": hostname,
-            "load_avg": [float(loadavg[0]), float(loadavg[1]), float(loadavg[2])],
+            "load_avg": [
+                float(loadavg[0] / cores),
+                float(loadavg[1] / cores),
+                float(loadavg[2] / cores),
+            ],
+            "cores": cores,
             "cpu_percent": cpu_percent,
             "mem": mem,
             "disk": disk,
