@@ -116,10 +116,33 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.5rem;">
 
-            <!-- List all Lanes from the mapping response -->
-            <h3>Verfügbare Bahnen</h3>
             @let mappingData = tasterService.mappingResource.value();
             @if (mappingData) {
+              <h3>Starter</h3>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                @let starterTaster = mappingData.starter;
+                @if (starterTaster) {
+                  <app-taster-card
+                    [title]="'Taster ' + starterTaster?.name || 'Taster'"
+                    [detail]="starterTaster?.mac || 'Nicht belegt'"
+                    [vitals]=undefined
+                    [badgeText]="'Starter AKTIV'"
+                    badgeVariant="active"
+                    (click)="removeTasterFromLane('starter')">
+                  </app-taster-card>
+                } @else {
+                  <app-taster-card
+                    [title]="'Starter'"
+                    [detail]="'Nicht belegt'"
+                    [badgeText]="selectedTasterForAssignment() ? 'HIERHER ZUWEISEN' : 'LEER'"
+                    [badgeVariant]="selectedTasterForAssignment() ? 'default' : 'inactive'"
+                    (click)="selectedTasterForAssignment() ? assignTaster(selectedTasterForAssignment()!, 'starter') : null">
+                  </app-taster-card>
+                }
+              </div>
+
+              <!-- List all Lanes from the mapping response -->
+              <h3>Verfügbare Bahnen</h3>
               @for (laneEntry of mappingData.mapping | keyvalue; track laneEntry.key) {
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                   @let taster = laneEntry.value;

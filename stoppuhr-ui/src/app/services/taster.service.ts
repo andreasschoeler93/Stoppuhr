@@ -12,6 +12,7 @@ export interface Taster {
 export interface MappingResponse {
   mapping: { [lane: string]: Taster | null }; // Lane number -> MAC address
   unmapped_taster: Taster[];
+  starter: Taster | null;
 }
 
 export interface PostTasterResponse {
