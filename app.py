@@ -110,6 +110,11 @@ def index() -> str:
     return render_template("index.html", version=APP_VERSION)
 
 
+@app.get("/simulator")
+def simulator() -> str:
+    return render_template("simulator.html", version=APP_VERSION)
+
+
 @app.get("/api/version")
 def api_version() -> dict[str, str]:
     return {"version": str(APP_VERSION), "status": "stable-beta"}
@@ -171,13 +176,20 @@ def get_mapping():
         str(lane): mac_to_taster.get(current_mapping.get(str(lane)))
         for lane in range(1, max_lane + 1)
     }
+    starter_taster = mac_to_taster.get(current_mapping.get("starter"))
 
     # Get the set of MAC addresses that are already assigned to a lane
     mapped_macs = set(current_mapping.values())
     # Filter tasters whose MAC is not in the mapped_macs set
     unmapped_tasters = [t for t in tasters if t.get("mac") not in mapped_macs]
 
-    return jsonify({"mapping": full_mapping, "unmapped_taster": unmapped_tasters})
+    return jsonify(
+        {
+            "mapping": full_mapping,
+            "starter": starter_taster,
+            "unmapped_taster": unmapped_tasters,
+        }
+    )
 
 
 @app.get("/api/assignments/mapping")
