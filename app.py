@@ -47,15 +47,24 @@ class Taster(TypedDict):
     stopwatch_ms: Optional[int]
 
 
+class PressEvent(TypedDict):
+    ts: int
+    run: str
+    mac: str
+    lane: str
+
+
 class State(TypedDict):
     settings: dict[str, str]
     startcards: dict[str, Any]
     tasters: list[Taster]
     # triggers: list[Trigger]
     vitals: dict[str, Vital]
+    current_run: int
     runs: dict[str, Any]
     assignments: dict[str, Any]
-    startcards_per_run: dict[str, list[dict[str, Any]]]
+    startcards_per_run: dict[int, list[dict[str, Any]]]
+    triggers_per_run: dict[str, list[PressEvent]]
 
 
 def _default_state() -> State:
@@ -84,6 +93,8 @@ def _default_state() -> State:
         "assignments": {"mapping": {}, "last_update_ts": None},
         "vitals": {},  # Maps the mac address to the vitals
         "startcards_per_run": defaultdict(list),
+        "triggers_per_run": defaultdict(list),
+        "current_run": -1,
     }
 
 
@@ -385,7 +396,7 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
             # Determine the run number
             lauf = clean_startcard.get("Lauf")
             if lauf:
-                runs.add(lauf)
+                runs.add(int(lauf))
                 startcards_per_run[lauf].append(clean_startcard)
             # Determine the highest lane number
             bahn = clean_startcard.get("Bahn")
@@ -545,6 +556,76 @@ def api_network_status():
             "interfaces": interfaces,
         }
     )
+
+
+def _lane_for_mac(st: State, mac: str) -> Optional[str]:
+    """
+    Returns lane key ('1'..'N' or 'starter') for a given MAC based on current assignments.
+
+    Args:
+        st: Current state dictionary.
+        mac: MAC address to look up.
+
+    Returns:
+        Lane key if found, otherwise None.
+    """
+    mapping = (st.get("assignments", {}) or {}).get("mapping", {}) or {}
+
+    mac_norm = str(mac).strip()
+    for lane_key, mapped_mac in mapping.items():
+        if mapped_mac == mac_norm:
+            return str(lane_key)
+    return None
+
+
+@app.get("/taster-buttons")
+def taster_buttons() -> str:
+    return render_template("taster-buttons.html", version=APP_VERSION)
+
+
+@app.post("/api/triggers")
+def api_post_triggers():
+    """
+    Records a taster press for the CURRENT run.
+
+    Payload:
+      { "mac": "AA:BB:...", "ts": 123(optional) }
+
+    Response:
+      { ok: true, press: {ts, run, mac} }
+    """
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+
+    mac = payload.get("mac")
+    if not mac:
+        return jsonify({"ok": False, "error": "missing mac"}), 400
+
+    # ToDo: Should the taster store information about the current run or only the server?
+    current_run = (st.get("runs", {}) or {}).get("current_run")
+    if current_run is None or str(current_run).strip() == "":
+        return jsonify({"ok": False, "error": "no current_run selected"}), 400
+
+    ts_val = int(payload.get("ts", now_ms()))
+
+    mac_norm = str(mac).strip()
+    lane = _lane_for_mac(st, mac_norm)
+
+    if lane is None:
+        return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
+
+    press: PressEvent = {
+        "ts": ts_val,
+        "run": str(current_run),
+        "mac": mac_norm,
+        "lane": lane,
+    }
+
+    presses = st.get("triggers_per_run", [])
+    presses[current_run].append(press)
+    save_state(st)
+
+    return jsonify({"ok": True, "press": press})
 
 
 def main():
