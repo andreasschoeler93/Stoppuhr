@@ -621,11 +621,16 @@ def api_post_triggers():
         "lane": lane,
     }
 
-    presses = st.get("triggers_per_run", [])
-    presses[current_run].append(press)
+    presses = st.get("triggers_per_run", dict)
+    presses.setdefault(current_run, []).append(press)
     save_state(st)
 
     return jsonify({"ok": True, "press": press})
+
+
+@app.get("/tasters")
+def tasters_page() -> str:
+    return render_template("tasters.html", version=APP_VERSION)
 
 
 def main():
