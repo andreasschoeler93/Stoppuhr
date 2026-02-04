@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Taster – Übersicht</title>
+    <style>
+        :root {
+            --border: rgba(0, 0, 0, .12);
+            --muted: rgba(0, 0, 0, .65);
+        }
+
+        body {
+            font-family: system-ui, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 0;
+            background: #f6f7f9;
+        }
+
+        .wrap {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .title {
+            font-weight: 800;
+            font-size: 16px;
+        }
+
+        .sub {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        .btn {
+            border: 1px solid var(--border);
+            background: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .state {
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .panel {
+            margin-top: 12px;
+            padding: 12px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .panel-title {
+            font-weight: 800;
+            font-size: 14px;
+            margin: 0 0 8px;
+        }
+
+        .form-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .input {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            min-width: 180px;
+            font: inherit;
+            background: #fff;
+        }
+
+        .hint {
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .map {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 10px;
+        }
+
+        .lane-btn {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            padding: 10px;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .lane-btn[disabled] {
+            opacity: .6;
+            cursor: not-allowed;
+        }
+
+        .lane-name {
+            font-weight: 800;
+            font-size: 13px;
+        }
+
+        .lane-detail {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .grid {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 12px;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: baseline;
+        }
+
+        .card-title {
+            font-weight: 800;
+            font-size: 14px;
+        }
+
+        .detail {
+            margin-top: 4px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .badge {
+            font-size: 11px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: #fff;
+            white-space: nowrap;
+        }
+
+        .badge.active {
+            font-weight: 800;
+        }
+
+        .badge.inactive {
+            opacity: .65;
+        }
+
+        footer {
+            margin-top: 14px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="topbar">
+        <div>
+            <div class="title">Taster – Übersicht</div>
+            <div class="sub">Mit Bahn-Map: Klick simuliert einen echten Taster-Trigger</div>
+        </div>
+        <button class="btn" id="reloadBtn">Aktualisieren</button>
+    </div>
+
+    <div class="panel" id="simPanel">
+        <div class="panel-title">Simulator</div>
+
+        <div class="form-row">
+            <div class="hint" id="runState">Lauf: –</div>
+        </div>
+
+        <div class="hint">
+            Tipp: Wenn ein Trigger fehlschlägt, ist meist kein Lauf gesetzt oder die Bahn hat keinen Taster zugewiesen.
+        </div>
+
+        <div class="map" id="laneMap"></div>
+
+        <div class="state" id="triggerState" style="display:none;"></div>
+    </div>
+    <h1>State</h1>
+    <div class="state" id="stateBox">Lade…</div>
+    <div class="grid" id="grid"></div>
+
+    <footer>
+        Version: <code>{{ version }}</code> · Endpoints: <code>/api/mapping</code>, <code>/api/runs</code>, <code>/api/triggers</code>
+    </footer>
+</div>
+
+<script src="/static/tasters.js"></script>
+</body>
+</html>
