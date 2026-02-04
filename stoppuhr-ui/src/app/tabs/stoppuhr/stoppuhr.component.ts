@@ -12,6 +12,7 @@ import {StatusService} from '../../services/status.service';
 import {JAuswertungService} from '../../services/jauswertung.service';
 import {TasterService} from '../../services/taster.service';
 import {TasterCardComponent} from '../../component/taster-card/taster-card.component';
+import {HttpClient} from '@angular/common/http';
 
 @Component({
   selector: 'app-stoppuhr',
@@ -32,6 +33,7 @@ import {TasterCardComponent} from '../../component/taster-card/taster-card.compo
 export class StoppuhrComponent {
 
   private statusService = inject(StatusService);
+  private http = inject(HttpClient);
   protected jauswertungService = inject(JAuswertungService);
   protected tasterService = inject(TasterService)
   public runs: string[] = [];
@@ -153,6 +155,16 @@ export class StoppuhrComponent {
     this.tasterService.unassignTaster(lane).subscribe({
       next: () => this.tasterService.reload(),
       error: (err) => console.error('Unassignment failed', err)
+    });
+  }
+
+  onRunSelected(newRun: string | null) {
+    // 1) keep UI state in sync
+    this.selectedLauf.set(newRun);
+
+    // 2) persist on backend so /api/triggers knows the current run
+    this.http.post('/api/runs', {current_run: newRun}).subscribe({
+      error: (err) => console.error('Failed to set current_run', err),
     });
   }
 

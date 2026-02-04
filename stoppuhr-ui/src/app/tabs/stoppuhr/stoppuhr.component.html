@@ -16,7 +16,7 @@
 
         <div>
           <div class="actions-right">
-            <button mat-stroked-button color="primary" (click)="loadStartkarten()">
+            <button mat-stroked-button mat-raised-button color="primary" (click)="loadStartkarten()">
               Startkarten laden
             </button>
             <p>{{ statusText() }}</p>
@@ -36,7 +36,7 @@
     <mat-card-content>
       <mat-form-field appearance="outline">
         <mat-label>Aktueller Lauf</mat-label>
-        <mat-select [ngModel]="selectedLauf()" (ngModelChange)="selectedLauf.set($event)" name="laufSelect">
+        <mat-select [ngModel]="selectedLauf()" (ngModelChange)="onRunSelected($event)" name="laufSelect">
           @if (laufOptions().length === 0) {
             <mat-option disabled>Keine Läufe vorhanden</mat-option>
           }
@@ -46,11 +46,7 @@
         </mat-select>
       </mat-form-field>
 
-      <button mat-raised-button color="primary" (click)="loadStartkarten()">
-        Startkarten laden
-      </button>
 
-      <span>{{ statusText() }}</span>
     </mat-card-content>
   </mat-card>
   <div class="grid-mapping">
