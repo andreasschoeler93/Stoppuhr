@@ -51,9 +51,7 @@ class Taster(TypedDict):
 
 class PressEvent(TypedDict):
     ts: int
-    run: str
     mac: str
-    lane: str
 
 
 @dataclass(slots=True)
@@ -84,7 +82,7 @@ class State(TypedDict):
     results: dict[int, Any]
     assignments: dict[str, Any]
     startcards_per_run: dict[int, list[dict[str, Startcard]]]
-    triggers_per_run: dict[str, list[PressEvent]]
+    triggers_per_run: dict[str, dict[str, list[PressEvent]]]  # Maps run to lane to PressEvent
 
 
 def _default_state() -> State:
@@ -113,7 +111,7 @@ def _default_state() -> State:
         "assignments": {"mapping": {}, "last_update_ts": None},
         "vitals": {},  # Maps the mac address to the vitals
         "startcards_per_run": defaultdict(list),
-        "triggers_per_run": defaultdict(list),
+        "triggers_per_run": {},
         "current_run": -1,
     }
 
@@ -622,24 +620,21 @@ def api_post_triggers():
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
     presses = st.get("triggers_per_run", dict)
-    presses.setdefault(str(current_run), [])
+    presses.setdefault(str(current_run), {})
+    presses[str(current_run)].setdefault(lane, [])
     # Abort press if the run has not been started yet.
-    if lane != STARTER_KEY and not any(
-        p.get("lane") == STARTER_KEY for p in presses[str(current_run)]
-    ):
+    if lane != STARTER_KEY and any(p == STARTER_KEY for p in presses[str(current_run)].keys()):
         return jsonify({"ok": False, "error": "Run has not started yet."}), 400
     # Abort double press
-    if any(p.get("lane") == lane for p in presses[str(current_run)]):
+    if presses[str(current_run)][lane]:
         return jsonify({"ok": False, "error": "Double press detected."}), 400
 
     press: PressEvent = {
         "ts": ts_val,
-        "run": str(current_run),
         "mac": mac_norm,
-        "lane": str(lane),
     }
 
-    presses[str(current_run)].append(press)
+    presses[str(current_run)][lane].append(press)
     save_state(st)
 
     return jsonify({"ok": True, "press": press})
