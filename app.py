@@ -57,7 +57,7 @@ class PressEvent(TypedDict):
 
 
 @dataclass(slots=True)
-class StartcardRow:
+class Startcard:
     startnummer: str
     name: str
     nachname: str
@@ -83,7 +83,7 @@ class State(TypedDict):
     current_run: int
     results: dict[int, Any]
     assignments: dict[str, Any]
-    startcards_per_run: dict[int, list[dict[str, StartcardRow]]]
+    startcards_per_run: dict[int, list[dict[str, Startcard]]]
     triggers_per_run: dict[str, list[PressEvent]]
 
 
