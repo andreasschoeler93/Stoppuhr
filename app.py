@@ -15,6 +15,7 @@ import struct
 import time
 import urllib.request
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any, Final, Optional, TypedDict
 
 import psutil
@@ -27,6 +28,7 @@ APP_VERSION: Final[str] = "0.4.3"
 DEFAULT_PORT: Final[int] = 8000
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
+STARTER_KEY: Final[str] = "starter"
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -54,16 +56,34 @@ class PressEvent(TypedDict):
     lane: str
 
 
+@dataclass(slots=True)
+class StartcardRow:
+    startnummer: str
+    name: str
+    nachname: str
+    vorname: str
+    jahrgang: Optional[int]
+    gliederung: str
+    q_gld: str
+    altersklasse: str
+    geschlecht: str
+    bemerkung: str
+    disziplin: str
+    wettkampf: str
+    lauf: int
+    bahn: int
+    runde: str
+
+
 class State(TypedDict):
     settings: dict[str, str]
     startcards: dict[str, Any]
     tasters: list[Taster]
-    # triggers: list[Trigger]
     vitals: dict[str, Vital]
     current_run: int
-    runs: dict[str, Any]
+    results: dict[int, Any]
     assignments: dict[str, Any]
-    startcards_per_run: dict[int, list[dict[str, Any]]]
+    startcards_per_run: dict[int, list[dict[str, StartcardRow]]]
     triggers_per_run: dict[str, list[PressEvent]]
 
 
@@ -89,7 +109,7 @@ def _default_state() -> State:
             {"name": "E", "mac": "AA:BB:CC:DD:EE:04", "ts": 0, "stopwatch_ms": None},
             {"name": "F", "mac": "AA:BB:CC:DD:EE:05", "ts": 0, "stopwatch_ms": None},
         ],
-        "runs": {"current_run": None, "runs": []},
+        "results": {},
         "assignments": {"mapping": {}, "last_update_ts": None},
         "vitals": {},  # Maps the mac address to the vitals
         "startcards_per_run": defaultdict(list),
@@ -153,19 +173,7 @@ def api_set_settings() -> ResponseReturnValue:
 @app.get("/api/runs")
 def api_get_runs():
     st = load_state()
-    return jsonify(st["runs"])
-
-
-@app.post("/api/runs")
-def api_post_runs():
-    st = load_state()
-    payload = request.get_json(force=True, silent=True) or {}
-    if "current_run" in payload:
-        st["runs"]["current_run"] = payload["current_run"]
-    if "run" in payload:
-        st["runs"]["runs"].append(payload["run"])
-    save_state(st)
-    return jsonify({"ok": True, "runs": st["runs"]})
+    return jsonify(st["current_run"])
 
 
 @app.get("/api/assignments")
@@ -187,7 +195,7 @@ def get_mapping():
         str(lane): mac_to_taster.get(current_mapping.get(str(lane)))
         for lane in range(1, max_lane + 1)
     }
-    starter_taster = mac_to_taster.get(current_mapping.get("starter"))
+    starter_taster = mac_to_taster.get(current_mapping.get(STARTER_KEY))
 
     # Get the set of MAC addresses that are already assigned to a lane
     mapped_macs = set(current_mapping.values())
@@ -601,8 +609,7 @@ def api_post_triggers():
     if not mac:
         return jsonify({"ok": False, "error": "missing mac"}), 400
 
-    # ToDo: Should the taster store information about the current run or only the server?
-    current_run = (st.get("runs", {}) or {}).get("current_run")
+    current_run = st.get("current_run")
     if current_run is None or str(current_run).strip() == "":
         return jsonify({"ok": False, "error": "no current_run selected"}), 400
 
@@ -614,15 +621,25 @@ def api_post_triggers():
     if lane is None:
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
+    presses = st.get("triggers_per_run", dict)
+    presses.setdefault(str(current_run), [])
+    # Abort press if the run has not been started yet.
+    if lane != STARTER_KEY and not any(
+        p.get("lane") == STARTER_KEY for p in presses[str(current_run)]
+    ):
+        return jsonify({"ok": False, "error": "Run has not started yet."}), 400
+    # Abort double press
+    if any(p.get("lane") == lane for p in presses[str(current_run)]):
+        return jsonify({"ok": False, "error": "Double press detected."}), 400
+
     press: PressEvent = {
         "ts": ts_val,
         "run": str(current_run),
         "mac": mac_norm,
-        "lane": lane,
+        "lane": str(lane),
     }
 
-    presses = st.get("triggers_per_run", dict)
-    presses.setdefault(current_run, []).append(press)
+    presses[str(current_run)].append(press)
     save_state(st)
 
     return jsonify({"ok": True, "press": press})
