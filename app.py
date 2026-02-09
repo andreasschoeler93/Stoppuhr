@@ -81,7 +81,8 @@ class State(TypedDict):
     current_run: int
     results: dict[int, Any]
     assignments: dict[str, Any]
-    startcards_per_run: dict[int, list[dict[str, Startcard]]]
+    # Due to serialization, store run number always as string
+    startcards_per_run: dict[str, list[Startcard]]
     triggers_per_run: dict[str, dict[str, list[PressEvent]]]  # Maps run to lane to PressEvent
 
 
@@ -112,7 +113,7 @@ def _default_state() -> State:
         "vitals": {},  # Maps the mac address to the vitals
         "startcards_per_run": defaultdict(list),
         "triggers_per_run": {},
-        "current_run": -1,
+        "current_run": 1,
     }
 
 
@@ -123,6 +124,7 @@ def load_state() -> State:
         save_state(state)
     else:
         state = json.loads(state)
+
     return state
 
 
@@ -403,7 +405,7 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
             lauf = clean_startcard.get("Lauf")
             if lauf:
                 runs.add(int(lauf))
-                startcards_per_run[lauf].append(clean_startcard)
+                startcards_per_run[str(lauf)].append(clean_startcard)
             # Determine the highest lane number
             bahn = clean_startcard.get("Bahn")
             try:
@@ -420,7 +422,7 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
         state["startcards"].update(
             {
                 "rows": startcards,
-                "startcards_per_run": startcards_per_run,
+                # "startcards_per_run": startcards_per_run,
                 "row_count": len(startcards),
                 "last_fetch_ts": now_ms(),
                 "last_error": None,
@@ -430,6 +432,7 @@ def api_load_startcards() -> tuple[ResponseReturnValue, int]:
                 "loaded": True,
             }
         )
+        state["startcards_per_run"] = startcards_per_run
         save_state(state)
 
         return jsonify(
@@ -623,7 +626,7 @@ def api_post_triggers():
     presses.setdefault(str(current_run), {})
     presses[str(current_run)].setdefault(lane, [])
     # Abort press if the run has not been started yet.
-    if lane != STARTER_KEY and any(p == STARTER_KEY for p in presses[str(current_run)].keys()):
+    if lane != STARTER_KEY and not any(p == STARTER_KEY for p in presses[str(current_run)].keys()):
         return jsonify({"ok": False, "error": "Run has not started yet."}), 400
     # Abort double press
     if presses[str(current_run)][lane]:
@@ -635,8 +638,15 @@ def api_post_triggers():
     }
 
     presses[str(current_run)][lane].append(press)
+    # Check, if for all lanes presses have been received
+    if not (
+        set([v["Bahn"] for v in st["startcards_per_run"][str(current_run)]])
+        - set(presses[str(current_run)].keys())
+    ):
+        print(f"All lanes have been pressed: start run: {int(current_run) + 1}")
+        # Increase run number
+        st["current_run"] = int(current_run) + 1
     save_state(st)
-
     return jsonify({"ok": True, "press": press})
 
 
