@@ -40,6 +40,33 @@
         triggerState.textContent = '';
     }
 
+    async function loadCurrentRun() {
+        try {
+            const resp = await fetch('/api/runs', {headers: {'Accept': 'application/json'}});
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+            const current = await resp.json().catch(() => ({}));
+
+            const text = (current === null || current === undefined || String(current).trim() === '')
+                ? 'Lauf: –'
+                : `Lauf: ${current}`;
+
+            if (runState) runState.textContent = text;
+
+            // optional: Input synchronisieren
+            if (runInput) {
+                runInput.value = (current === null || current === undefined) ? '' : String(current);
+            }
+
+            return current;
+        } catch (e) {
+            if (runState) runState.textContent = 'Lauf: –';
+            // Kein hartes Fail: Mapping/Buttons sollen trotzdem laden können
+            showTriggerState(`Fehler beim Laden des aktuellen Laufs: ${e?.message || e}`, true);
+            return null;
+        }
+    }
+
     function card({title, detail, badgeText, badgeVariant}) {
         const badgeClass = badgeVariant === 'active' ? 'badge active' : 'badge inactive';
         return `
@@ -143,37 +170,6 @@
         }
     }
 
-    async function setCurrentRun(runValue) {
-        const v = String(runValue ?? '').trim();
-        if (!v) {
-            runState.textContent = 'Lauf: –';
-            showTriggerState('Bitte einen Lauf eingeben (z.B. 1).', true);
-            return;
-        }
-
-        hideTriggerState();
-        setRunBtn.disabled = true;
-
-        try {
-            const resp = await fetch('/api/runs', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-                body: JSON.stringify({current_run: v}),
-            });
-
-            const data = await resp.json().catch(() => ({}));
-            if (!resp.ok || data.ok === false) {
-                throw new Error(data.error || `HTTP ${resp.status}`);
-            }
-
-            runState.textContent = `Lauf: ${v}`;
-            showTriggerState(`Aktueller Lauf gesetzt: ${v}`);
-        } catch (e) {
-            showTriggerState(`Fehler beim Setzen des Laufs: ${e?.message || e}`, true);
-        } finally {
-            setRunBtn.disabled = false;
-        }
-    }
 
     async function sendTrigger(mac, label) {
         hideTriggerState();
@@ -215,6 +211,9 @@
             setState('Lade…');
             hideTriggerState();
 
+            // NEW: aktuellen Lauf aus State laden (Anzeige oben)
+            await loadCurrentRun();
+
             const resp = await fetch('/api/mapping', {headers: {'Accept': 'application/json'}});
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -242,15 +241,19 @@
 
     reloadBtn.addEventListener('click', load);
 
-    setRunBtn.addEventListener('click', async () => {
-        await setCurrentRun(runInput.value);
-    });
+    if (setRunBtn) {
+        setRunBtn.addEventListener('click', async () => {
+            await setCurrentRun(runInput?.value);
+        });
+    }
 
-    runInput.addEventListener('keydown', async (ev) => {
-        if (ev.key === 'Enter') {
-            await setCurrentRun(runInput.value);
-        }
-    });
+    if (runInput) {
+        runInput.addEventListener('keydown', async (ev) => {
+            if (ev.key === 'Enter') {
+                await setCurrentRun(runInput.value);
+            }
+        });
+    }
 
     await load();
 })();
