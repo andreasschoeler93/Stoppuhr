@@ -587,11 +587,6 @@ def _lane_for_mac(st: State, mac: str) -> Optional[str]:
     return None
 
 
-@app.get("/taster-buttons")
-def taster_buttons() -> str:
-    return render_template("taster-buttons.html", version=APP_VERSION)
-
-
 @app.post("/api/triggers")
 def api_post_triggers():
     """
@@ -647,7 +642,16 @@ def api_post_triggers():
         # Increase run number
         st["current_run"] = int(current_run) + 1
     save_state(st)
-    return jsonify({"ok": True, "press": press})
+    return jsonify(
+        {
+            "ok": True,
+            "press": {
+                **press,
+                "run": current_run,
+                "lane": lane,
+            },
+        }
+    )
 
 
 @app.get("/tasters")
