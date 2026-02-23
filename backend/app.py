@@ -8,6 +8,7 @@
 import csv
 import io
 import json
+import logging
 import os
 import re
 import socket
@@ -20,8 +21,9 @@ from typing import Any, Final, Optional, TypedDict
 
 import psutil
 import redis
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, abort, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
+from xml_writer import create_xml_heats
 
 
 APP_VERSION: Final[str] = "0.4.3"
@@ -29,10 +31,12 @@ DEFAULT_PORT: Final[int] = 8000
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
+HEATS_XML_PATH: Final[str] = "/app/results/heats.xml"
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 redis_store = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
+logger = logging.getLogger(__name__)
 
 
 class Vital(TypedDict):
@@ -83,7 +87,7 @@ class State(TypedDict):
     assignments: dict[str, Any]
     # Due to serialization, store run number always as string
     startcards_per_run: dict[str, list[Startcard]]
-    triggers_per_run: dict[str, dict[str, list[PressEvent]]]  # Maps run to lane to PressEvent
+    triggers_per_run: dict[str, dict[str, PressEvent]]  # Maps run to lane to PressEvent
 
 
 def _default_state() -> State:
@@ -469,7 +473,7 @@ def api_system_status():
     mem = {
         "total": virtual_mem.total,
         "used": virtual_mem.used,
-        "free": virtual_mem.available,  # 'available' is usually better than 'free' on Linux
+        "free": virtual_mem.available,
         "percent": virtual_mem.percent,
     }
 
@@ -619,7 +623,7 @@ def api_post_triggers():
 
     presses = st.get("triggers_per_run", dict)
     presses.setdefault(str(current_run), {})
-    presses[str(current_run)].setdefault(lane, [])
+    presses[str(current_run)].setdefault(lane, None)
     # Abort press if the run has not been started yet.
     if lane != STARTER_KEY and not any(p == STARTER_KEY for p in presses[str(current_run)].keys()):
         return jsonify({"ok": False, "error": "Run has not started yet."}), 400
@@ -632,13 +636,19 @@ def api_post_triggers():
         "mac": mac_norm,
     }
 
-    presses[str(current_run)][lane].append(press)
+    presses[str(current_run)][lane] = press
     # Check, if for all lanes presses have been received
     if not (
         set([v["Bahn"] for v in st["startcards_per_run"][str(current_run)]])
         - set(presses[str(current_run)].keys())
     ):
         print(f"All lanes have been pressed: start run: {int(current_run) + 1}")
+        lane_times = determine_lane_times_per_run()
+        print(lane_times)
+        lane_xml = create_xml_heats(lane_times)
+        # Write XML file to app/results folder
+        with open(HEATS_XML_PATH, "w") as f:
+            f.write(lane_xml)
         # Increase run number
         st["current_run"] = int(current_run) + 1
     save_state(st)
@@ -654,9 +664,109 @@ def api_post_triggers():
     )
 
 
+@app.route("/heats.xml")
+def serve_heats_xml():
+    # Check if file exists
+    if not os.path.exists(HEATS_XML_PATH):
+        abort(404, description="XML file not found")
+
+    # Read file contents
+    with open(HEATS_XML_PATH, "r", encoding="utf-8") as f:
+        xml_content = f.read()
+
+    return Response(
+        xml_content,
+        mimetype="application/xml",
+        headers={"Content-Disposition": "attachment; filename=heats.xml"},
+    )
+
+
 @app.get("/tasters")
 def tasters_page() -> str:
     return render_template("tasters.html", version=APP_VERSION)
+
+
+LaneTimesPerRun = dict[str, dict[str, int]]  # run -> lane -> time_ms
+
+
+def determine_lane_times_per_run() -> LaneTimesPerRun:
+    """
+    Determine time per lane for each run.
+
+    For each run:
+      - reads starter press timestamp (lane key = `starter_key`)
+      - for each other lane with at least one PressEvent, uses the first press ts
+      - computes delta to starter ts
+
+    Returns:
+        lane_times: A dictionary which stores the time for a run and a delta
+    """
+    lane_times: LaneTimesPerRun = {}
+    state = load_state()
+    for run, presses_by_run in state["triggers_per_run"].items():
+        if not presses_by_run:
+            logger.warning(f"No presses recorded for {run=}")
+            continue
+
+        starter_presses = presses_by_run.get(STARTER_KEY) or None
+        if not starter_presses:
+            logger.warning(f"No starter press recorded for {run=}")
+            continue
+
+        if not isinstance(starter_ts := starter_presses.get("ts"), int):
+            logger.warning(f"Starter press ts is not an int for {run=}")
+            continue
+
+        run_times: dict[str, int] = {}
+        # Sort lanes
+        print("????????????")
+        print(presses_by_run)
+        presses_by_run = sort_lane_times_by_lane(presses_by_run)
+        print("After sorting:")
+        print(presses_by_run)
+        for lane, lane_presses in presses_by_run.items():
+            if lane == STARTER_KEY:
+                continue
+
+            if not lane_presses:
+                logger.warning(f"No press recorded for {lane=} in {run=}")
+                continue
+
+            lane_ts = lane_presses.get("ts")
+            if not isinstance(lane_ts, int):
+                logger.warning(f"Lane press ts is not an int for {lane=} in {run=}")
+                continue
+
+            delta = lane_ts - starter_ts
+            if delta < 0:
+                logger.warning(
+                    f"Lane press ts is before starter press ts for {lane=} in {run=} ({delta=})"
+                )
+                continue
+
+            run_times[str(lane)] = delta
+
+        lane_times[str(run)] = run_times
+
+    return lane_times
+
+
+def sort_lane_times_by_lane(presses_by_lane: dict[str, PressEvent]) -> dict[str, PressEvent]:
+    """
+    Sort lane time of ``presses_by_lane`` ascending.
+
+    Args:
+        presses_by_lane: The time per lane.
+
+    Returns:
+        the sorted lane time dict.
+    """
+
+    def lane_sort_key(lane: str):
+        s = str(lane).strip()
+        return (0, int(s)) if s.isdigit() else (1, s)
+
+    return dict(sorted(presses_by_lane.items(), key=lambda kv: lane_sort_key(kv[0])))
 
 
 def main():
