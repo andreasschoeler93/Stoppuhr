@@ -27,7 +27,7 @@ from xml_writer import create_xml_heats
 
 
 APP_VERSION: Final[str] = "0.4.3"
-DEFAULT_PORT: Final[int] = 8000
+DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
@@ -642,13 +642,14 @@ def api_post_triggers():
         set([v["Bahn"] for v in st["startcards_per_run"][str(current_run)]])
         - set(presses[str(current_run)].keys())
     ):
-        print(f"All lanes have been pressed: start run: {int(current_run) + 1}")
+        logger.info(f"All lanes have been pressed: start run: {int(current_run) + 1}")
         lane_times = determine_lane_times_per_run()
-        print(lane_times)
+        logger.info(lane_times)
         lane_xml = create_xml_heats(lane_times)
         # Write XML file to app/results folder
         with open(HEATS_XML_PATH, "w") as f:
             f.write(lane_xml)
+            logger.info(f"Wrote results file to {HEATS_XML_PATH}")
         # Increase run number
         st["current_run"] = int(current_run) + 1
     save_state(st)
@@ -664,7 +665,7 @@ def api_post_triggers():
     )
 
 
-@app.route("/heats.xml")
+@app.route("/legacy/heats.xml")
 def serve_heats_xml():
     # Check if file exists
     if not os.path.exists(HEATS_XML_PATH):
