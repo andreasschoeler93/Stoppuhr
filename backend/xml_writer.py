@@ -107,7 +107,9 @@ def create_xml_heats(heats_data) -> str:
         create_heat(
             parent=root,
             event_number=run,
-            heat_number=3,  # In my example heats.xml this is always 3: ToDo: Determine why? MaOl
+            heat_number=len(
+                heats_data.keys()
+            ),  # In my example, it was always 3 since I had three had entries
             lane_times=lane_times,
         )
 
