@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "1999:1999"
     depends_on:
       - redis
     environment:
