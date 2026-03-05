@@ -650,9 +650,9 @@ def api_post_triggers():
         set([v["Bahn"] for v in st["startcards_per_run"][str(current_run)]])
         - set(triggers_per_run[str(current_run)].keys())
     ):
-        print(f"All lanes have been pressed: start run: {int(current_run) + 1}")
+        logger.info(f"All lanes have been pressed: start run: {int(current_run) + 1}")
         lane_times = determine_lane_times_per_run()
-        print(lane_times)
+        logger.info(lane_times)
         lane_xml = create_xml_heats(lane_times)
         # Write XML file to app/results folder
         with open(HEATS_XML_PATH, "w") as f:
@@ -728,11 +728,7 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
 
         run_times: dict[str, int] = {}
         # Sort lanes
-        print("????????????")
-        print(presses_by_run)
         presses_by_run = sort_lane_times_by_lane(presses_by_run)
-        print("After sorting:")
-        print(presses_by_run)
         for lane, lane_presses in presses_by_run.items():
             if lane == STARTER_KEY:
                 continue
@@ -756,8 +752,6 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
             run_times[int(lane)] = delta
 
         lane_times[int(run)] = run_times
-    print("____________")
-    print(lane_times)
     return lane_times
 
 
