@@ -88,8 +88,9 @@ def create_heat(
     lanes: ET.Element = ET.SubElement(heat, "lanes")
 
     # Add one lane entry per mapping item.
+    # Lanes are zero-based
     for lane_index, time_value in lane_times.items():
-        create_lane(lanes, lane_index, time_value)
+        create_lane(lanes, lane_index - 1, time_value)
 
     # Set the event number for this heat.
     event: ET.Element = ET.SubElement(heat, "event")
