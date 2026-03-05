@@ -11,12 +11,6 @@ from xml.dom import minidom
 from xml.etree import ElementTree as ET
 
 
-# ToDo: Move LinesPerRun to seperaze class
-# from app import LaneTimesPerRun
-
-# Todo: Discuss with MaOl if lanes have to start at 0 in XML
-
-
 def prettify(elem: ET.Element) -> str:
     """Return a pretty-printed XML string for an ElementTree element."""
     # Serialize the ElementTree element (and its subtree) into raw XML bytes.
