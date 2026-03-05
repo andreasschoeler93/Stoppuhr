@@ -621,35 +621,43 @@ def api_post_triggers():
     if lane is None:
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
-    presses = st.get("triggers_per_run", dict)
-    presses.setdefault(str(current_run), {})
-    presses[str(current_run)].setdefault(lane, None)
+    triggers_per_run = st.get("triggers_per_run", dict)
+    triggers_per_run.setdefault(str(current_run), {})
+    triggers_per_run[str(current_run)].setdefault(lane, None)
     # Abort press if the run has not been started yet.
-    if lane != STARTER_KEY and not any(p == STARTER_KEY for p in presses[str(current_run)].keys()):
+    if lane != STARTER_KEY and not any(
+        p == STARTER_KEY for p in triggers_per_run[str(current_run)].keys()
+    ):
         return jsonify({"ok": False, "error": "Run has not started yet."}), 400
     # Abort double press
-    if presses[str(current_run)][lane]:
+    if triggers_per_run[str(current_run)][lane]:
         return jsonify({"ok": False, "error": "Double press detected."}), 400
-
+    # Reject lanes which are not in the current run, except STARTER
+    if lane != STARTER_KEY and lane not in (
+        v["Bahn"] for v in st["startcards_per_run"][str(current_run)]
+    ):
+        abort(400, description=f"Lane {lane} is not in the current run.")
     press: PressEvent = {
         "ts": ts_val,
         "mac": mac_norm,
     }
 
-    presses[str(current_run)][lane] = press
+    triggers_per_run[str(current_run)][lane] = press
+    st["triggers_per_run"] = triggers_per_run
+    save_state(st)
     # Check, if for all lanes presses have been received
     if not (
         set([v["Bahn"] for v in st["startcards_per_run"][str(current_run)]])
-        - set(presses[str(current_run)].keys())
+        - set(triggers_per_run[str(current_run)].keys())
     ):
-        logger.info(f"All lanes have been pressed: start run: {int(current_run) + 1}")
+        print(f"All lanes have been pressed: start run: {int(current_run) + 1}")
         lane_times = determine_lane_times_per_run()
-        logger.info(lane_times)
+        print(lane_times)
         lane_xml = create_xml_heats(lane_times)
         # Write XML file to app/results folder
         with open(HEATS_XML_PATH, "w") as f:
             f.write(lane_xml)
-            logger.info(f"Wrote results file to {HEATS_XML_PATH}")
+            print(f"Wrote results file to {HEATS_XML_PATH}")
         # Increase run number
         st["current_run"] = int(current_run) + 1
     save_state(st)
@@ -709,7 +717,7 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
             logger.warning(f"No presses recorded for {run=}")
             continue
 
-        starter_presses = presses_by_run.get(STARTER_KEY) or None
+        starter_presses = presses_by_run.get(STARTER_KEY)
         if not starter_presses:
             logger.warning(f"No starter press recorded for {run=}")
             continue
@@ -745,10 +753,11 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
                 )
                 continue
 
-            run_times[str(lane)] = delta
+            run_times[int(lane)] = delta
 
-        lane_times[str(run)] = run_times
-
+        lane_times[int(run)] = run_times
+    print("____________")
+    print(lane_times)
     return lane_times
 
 
