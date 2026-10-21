@@ -1,32 +1,37 @@
+
 FROM python:3.13-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PORT=1999
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Create app and app/results dir and a non-root user for security
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PORT=1999 \
+    UV_LINK_MODE=copy \
+    PATH="/app/.venv/bin:$PATH"
+
+# Working directory
+WORKDIR /app
+
+# Copy dependency definitions first for caching
+COPY pyproject.toml uv.lock ./
+
+# Install production dependencies only
+RUN uv sync --locked --no-dev --no-install-project
+
+# Copy application code
+COPY ./backend ./
+
+# Create directories and non-root user
 RUN useradd -m appuser && \
     mkdir -p /app/results && \
     chown -R appuser:appuser /app
 
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application code
-COPY ./backend .
-
 # Switch to non-root user
 USER appuser
 
-# Expose the port the app runs on
+# Expose Flask port
 EXPOSE $PORT
 
 # Run the application
