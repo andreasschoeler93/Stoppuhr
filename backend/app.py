@@ -105,6 +105,7 @@ def _default_state() -> State:
             "startcards_base_url": "",
             "startcards_suffix": "/export/CSV/Startkarten.csv",
             "auto_next_run_s": "10",
+            "stop_lockout_s": "5",
         },
         "startcards": {
             "loaded": False,
@@ -151,6 +152,14 @@ def _auto_next_delay_ms(st: State) -> int:
         return 10_000
 
 
+def _stop_lockout_ms(st: State) -> int:
+    """Stopp-Sperre nach dem Start in ms (Einstellung, Standard 5 s, 0 = aus)."""
+    try:
+        return max(0, int(st.get("settings", {}).get("stop_lockout_s", 5))) * 1000
+    except (TypeError, ValueError):
+        return 5_000
+
+
 def _advance_run(st: State) -> None:
     st["current_run"] = int(st.get("current_run") or 0) + 1
     st["run_finished_ts"] = None
@@ -193,11 +202,12 @@ def api_set_settings() -> ResponseReturnValue:
     for k in ["startcards_base_url", "startcards_suffix"]:
         if k in payload:
             settings[k] = str(payload[k] or "")
-    if "auto_next_run_s" in payload:
-        try:
-            settings["auto_next_run_s"] = str(max(0, int(payload["auto_next_run_s"])))
-        except (TypeError, ValueError):
-            return jsonify({"ok": False, "error": "auto_next_run_s must be a number"}), 400
+    for key in ("auto_next_run_s", "stop_lockout_s"):
+        if key in payload:
+            try:
+                settings[key] = str(max(0, int(payload[key])))
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{key} must be a number"}), 400
     st["settings"] = settings
     save_state(st)
     return jsonify({"ok": True, "settings": settings})
@@ -720,6 +730,13 @@ def api_post_triggers():
         p == STARTER_KEY for p in triggers_per_run[str(current_run)].keys()
     ):
         return jsonify({"ok": False, "error": "Run has not started yet."}), 400
+    # Stopp-Sperre: Bahn-Signale kurz nach dem Start werden ignoriert (z. B. Fehlausloesungen)
+    if lane != STARTER_KEY:
+        starter_press = triggers_per_run[str(current_run)].get(STARTER_KEY)
+        lockout_ms = _stop_lockout_ms(st)
+        if starter_press and ts_val - int(starter_press["ts"]) < lockout_ms:
+            logger.info(f"Stop signal of lane {lane} ignored (lockout {lockout_ms} ms)")
+            return jsonify({"ok": True, "ignored": True, "reason": "stop_lockout"})
     # Abort double press
     if triggers_per_run[str(current_run)][lane]:
         return jsonify({"ok": False, "error": "Double press detected."}), 400

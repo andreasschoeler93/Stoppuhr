@@ -56,6 +56,7 @@ async function loadSettingsIntoUI() {
   byId("suffixInput").value = s.startcards_suffix || "/export/CSV/Startkarten.csv";
   byId("suffixDisplay").value = byId("suffixInput").value;
   byId("autoNextInput").value = s.auto_next_run_s ?? "10";
+  byId("stopLockoutInput").value = s.stop_lockout_s ?? "5";
 }
 
 async function loadStartcardsFromBackend() {
@@ -477,7 +478,8 @@ async function init() {
       await apiPost("/api/settings", {
         startcards_base_url: baseUrl,
         startcards_suffix: suffix,
-        auto_next_run_s: byId("autoNextInput").value
+        auto_next_run_s: byId("autoNextInput").value,
+        stop_lockout_s: byId("stopLockoutInput").value
       });
       // mirror to main tab
       await loadSettingsIntoUI();
