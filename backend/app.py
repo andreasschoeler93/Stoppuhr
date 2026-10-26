@@ -737,13 +737,7 @@ def api_post_triggers():
     # Check, if for all lanes presses have been received
     if lanes_in_run and not (set(lanes_in_run) - set(triggers_per_run[str(current_run)].keys())):
         logger.info(f"All lanes have been pressed in run {current_run}")
-        lane_times = determine_lane_times_per_run()
-        logger.info(lane_times)
-        lane_xml = create_xml_heats(lane_times)
-        # Write XML file to app/results folder
-        with open(HEATS_XML_PATH, "w") as f:
-            f.write(lane_xml)
-            print(f"Wrote results file to {HEATS_XML_PATH}")
+        _write_heats_xml(st)
         # Nach der eingestellten Wartezeit in den naechsten Lauf wechseln
         st["run_finished_ts"] = now_ms()
     save_state(st)
@@ -917,18 +911,57 @@ def api_test_reset_run():
     return jsonify({"ok": True, "run": run})
 
 
+def _heats_for_xml(st: State) -> list[tuple[int, int, dict[int, int]]]:
+    """
+    Fertige Laeufe als (Wettkampf, Lauf im Wettkampf, {Bahn: ms}) fuer JAuswertung.
+
+    Die Laufnummer der Startkarten laeuft ueber alle Wettkaempfe durch; JAuswertung erwartet
+    die Nummer innerhalb des Wettkampfs. Ein Lauf gilt als fertig, wenn alle Bahnen eine Zeit
+    haben oder der Lauf schon vor dem aktuellen liegt (Bahnen ohne Zeit fehlen dann).
+    """
+    cards_per_run = st.get("startcards_per_run") or {}
+    current = int(st.get("current_run") or 0)
+    event_of: dict[int, int] = {}
+    for run, cards in cards_per_run.items():
+        try:
+            event_of[int(run)] = int(float((cards[0].get("Wettkampf") or 1)))
+        except (ValueError, TypeError, IndexError):
+            event_of[int(run)] = 1
+    heat_of: dict[int, int] = {}
+    for event in set(event_of.values()):
+        for pos, run in enumerate(sorted(r for r, e in event_of.items() if e == event), start=1):
+            heat_of[run] = pos
+
+    heats = []
+    for run_s, lane_times in sorted(determine_lane_times_per_run().items()):
+        run = int(run_s)
+        if run not in event_of or not lane_times:
+            continue
+        expected = {int(c["Bahn"]) for c in cards_per_run.get(str(run), []) if str(c.get("Bahn")).isdigit()}
+        if run >= current and not expected <= set(lane_times):
+            continue
+        heats.append((event_of[run], heat_of[run], {int(k): v for k, v in lane_times.items()}))
+    return sorted(heats)
+
+
+def _write_heats_xml(st: State) -> str:
+    """Erzeugt das Ergebnis-XML und sichert es zusaetzlich als Datei."""
+    xml = create_xml_heats(_heats_for_xml(st))
+    try:
+        os.makedirs(os.path.dirname(HEATS_XML_PATH), exist_ok=True)
+        with open(HEATS_XML_PATH, "w", encoding="utf-8") as f:
+            f.write(xml)
+        logger.info(f"Wrote results file to {HEATS_XML_PATH}")
+    except OSError as exc:
+        logger.warning(f"Could not write {HEATS_XML_PATH}: {exc}")
+    return xml
+
+
 @app.route("/legacy/heats.xml")
 def serve_heats_xml():
-    # Check if file exists
-    if not os.path.exists(HEATS_XML_PATH):
-        abort(404, description="XML file not found")
-
-    # Read file contents
-    with open(HEATS_XML_PATH, "r", encoding="utf-8") as f:
-        xml_content = f.read()
-
+    # Immer aus dem aktuellen Stand erzeugen, damit JAuswertung nie veraltete Zeiten abholt
     return Response(
-        xml_content,
+        _write_heats_xml(load_state()),
         mimetype="application/xml",
         headers={"Content-Disposition": "attachment; filename=heats.xml"},
     )

@@ -6,7 +6,7 @@ Created: 10.02.2026
 Copyright: © 2026 Robin Dönnebrink
 """
 
-from typing import Mapping
+from typing import Iterable, Mapping
 from xml.dom import minidom
 from xml.etree import ElementTree as ET
 
@@ -95,19 +95,20 @@ def create_heat(
     heat_elem.text = str(heat_number)
 
 
-def create_xml_heats(heats_data) -> str:
+def create_xml_heats(heats: Iterable[tuple[int, int, Mapping[int, int]]]) -> str:
+    """
+    Erzeugt das AlphaServer-XML fuer JAuswertung.
+
+    heats: Liste aus (Wettkampf, Lauf im Wettkampf, {Bahn (1-basiert): Zeit in ms}).
+    """
     root = ET.Element("AlphaServer.Heat-array")
 
-    for run, lane_times in heats_data.items():
+    for event_number, heat_number, lane_times in heats:
         create_heat(
             parent=root,
-            event_number=run,
-            heat_number=len(
-                heats_data.keys()
-            ),  # In my example, it was always 3 since I had three had entries
+            event_number=event_number,
+            heat_number=heat_number,
             lane_times=lane_times,
         )
 
-    xml_output = prettify(root)
-
-    return xml_output
+    return prettify(root)
