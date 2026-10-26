@@ -733,7 +733,7 @@ def api_get_run_status():
                     continue
                 times[str(lane)] = press["ts"] - starter_ts
         runs[str(run)] = {"started": starter_ts is not None, "starter_ts": starter_ts, "times_ms": times}
-    return jsonify({"current_run": st.get("current_run"), "runs": runs})
+    return jsonify({"current_run": st.get("current_run"), "server_now": now_ms(), "runs": runs})
 
 
 @app.post("/api/test/reset-run")

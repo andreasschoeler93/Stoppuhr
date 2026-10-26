@@ -186,16 +186,43 @@ function renderStarter() {
 
 // Messergebnisse des Servers (Zeiten je Lauf und Bahn)
 let runStatus = { current_run: null, runs: {} };
+let serverOffsetMs = 0; // Serverzeit minus Browserzeit
 
 async function loadRunStatus() {
+  const t0 = Date.now();
   runStatus = await apiGet("/api/run-status");
+  if (runStatus.server_now) serverOffsetMs = runStatus.server_now - (t0 + Date.now()) / 2;
   byId("serverRunLabel").textContent = "Server-Lauf: " + (runStatus.current_run ?? "–");
-  if (!document.querySelector(".taster-card.dragging")) renderLanesTable();
+  updateClocks();
 }
 
 function formatMs(ms) {
   if (ms == null) return "–";
-  return (ms / 1000).toFixed(2) + " s";
+  const total = Math.max(0, ms) / 1000;
+  if (total < 60) return total.toFixed(2) + " s";
+  const m = Math.floor(total / 60);
+  return m + ":" + (total - m * 60).toFixed(2).padStart(5, "0");
+}
+
+// Zeitspalte: gestoppte Zeit fest anzeigen, sonst laeuft die Uhr seit dem Start mit
+function updateClocks() {
+  const run = runStatus.runs[String(currentRun)] || {};
+  const now = Date.now() + serverOffsetMs;
+  document.querySelectorAll(".lane-time").forEach(td => {
+    const lane = td.dataset.lane;
+    const stopped = (run.times_ms || {})[lane];
+    let text = "–";
+    let cls = "lane-time";
+    if (stopped != null) {
+      text = formatMs(stopped);
+      cls += " fw-bold";
+    } else if (run.started && td.dataset.active === "1") {
+      text = formatMs(now - run.starter_ts);
+      cls += " text-primary";
+    }
+    if (td.textContent !== text) td.textContent = text;
+    td.className = cls;
+  });
 }
 
 // TESTBEREICH: Tastendruck ohne echten Taster ausloesen (spaeter entfernen)
@@ -364,7 +391,7 @@ function renderLanesTable() {
       <td>${escapeHtml(startnr)}</td>
       <td>${escapeHtml(disz)}</td>
       <td><div class="drop-target" data-lane="${b}">${tasterHtml}</div></td>
-      <td>${escapeHtml(formatMs(((runStatus.runs[String(currentRun)] || {}).times_ms || {})[String(b)]))}</td>
+      <td class="lane-time" data-lane="${b}" data-active="${r ? 1 : 0}">–</td>
     `;
     tbody.appendChild(tr);
   }
@@ -374,6 +401,7 @@ function renderLanesTable() {
     : "Keine Laufdaten geladen.";
 
   attachDropTargets();
+  updateClocks();
 }
 
 // -----------------------------
@@ -459,7 +487,8 @@ async function init() {
   }
   byId("btnClearStarter").addEventListener("click", () =>
     apiPost("/api/unassign", { lane: "starter" }).then(() => loadButtons()).catch(e => alert(e.message)));
-  setInterval(() => { loadRunStatus().catch(() => {}); }, 2000);
+  setInterval(() => { loadRunStatus().catch(() => {}); }, 500);
+  setInterval(updateClocks, 50);
   // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
   setInterval(() => {
     if (document.querySelector(".taster-card.dragging")) return;
