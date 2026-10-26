@@ -519,9 +519,9 @@ async function init() {
   byId("suffixDisplay").value = byId("suffixInput").value;
   byId("baseUrlInput").addEventListener("input", () => { byId("baseUrlInputSettings").value = byId("baseUrlInput").value; });
 
-  // Eintrag fuer JAuswertung: Adresse dieser Seite (IP:Port) zum Kopieren
-  byId("alphaServerValue").value = location.host;
-  byId("alphaServerUrl").textContent = `http://${location.host}/heats.xml`;
+  // JAuswertung haengt Port 1999 und /legacy/heats.xml selbst an: eingetragen wird nur die IP
+  byId("alphaServerValue").value = location.hostname;
+  byId("alphaServerUrl").textContent = `http://${location.hostname}:1999/legacy/heats.xml`;
   byId("btnCopyAlpha").addEventListener("click", async () => {
     const input = byId("alphaServerValue");
     try { await navigator.clipboard.writeText(input.value); }
