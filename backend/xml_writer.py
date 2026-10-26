@@ -52,6 +52,16 @@ def create_lane(entry_parent: ET.Element, lane_index: int, time_value: int) -> N
     status.text = "RaceTimes"
 
 
+def create_empty_lane(entry_parent: ET.Element, lane_index: int) -> None:
+    """Leere Bahn ohne Zeit. JAuswertung erwartet die Bahnen lueckenlos ab 0."""
+    entry: ET.Element = ET.SubElement(entry_parent, "entry")
+    ET.SubElement(entry, "int").text = str(lane_index)
+    lane: ET.Element = ET.SubElement(entry, "AlphaServer.Lane")
+    ET.SubElement(lane, "laneindex").text = str(lane_index)
+    ET.SubElement(lane, "times")
+    ET.SubElement(lane, "stati")
+
+
 def create_heat(
     parent: ET.Element,
     event_number: int,
@@ -74,9 +84,13 @@ def create_heat(
     lanes: ET.Element = ET.SubElement(heat, "lanes")
 
     # Add one lane entry per mapping item.
-    # Lanes are zero-based
-    for lane_index, time_value in lane_times.items():
-        create_lane(lanes, lane_index - 1, time_value)
+    # Lanes are zero-based; Luecken werden mit leeren Bahnen gefuellt
+    zero_based = {lane_index - 1: time_value for lane_index, time_value in lane_times.items()}
+    for lane_index in range(0, max(zero_based, default=-1) + 1):
+        if lane_index in zero_based:
+            create_lane(lanes, lane_index, zero_based[lane_index])
+        else:
+            create_empty_lane(lanes, lane_index)
 
     # Set the event number for this heat.
     event: ET.Element = ET.SubElement(heat, "event")
