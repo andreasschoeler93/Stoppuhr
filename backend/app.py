@@ -33,11 +33,16 @@ EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
 CLOCK_OFFSET_MIN_MS: Final[int] = 250
-HEATS_XML_PATH: Final[str] = "/app/results/heats.xml"
+HEATS_XML_PATH: Final[str] = os.environ.get("HEATS_XML_PATH", "/app/results/heats.xml")
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-redis_store = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
+redis_store = redis.Redis(
+    host=os.environ.get("REDIS_HOST", "redis"),
+    port=int(os.environ.get("REDIS_PORT", "6379")),
+    db=0,
+    decode_responses=True,
+)
 logger = logging.getLogger(__name__)
 
 

@@ -27,8 +27,27 @@ docker compose up --build -d
 
 Weboberfläche:
 ```
-http://<PI-IP>:8000
+http://<PI-IP>:1999
 ```
+
+### Alternative: ohne Docker (direkt auf dem Pi)
+
+Installiert Python-Umgebung, Redis und einen systemd-Dienst, der beim Booten startet:
+
+```bash
+sudo apt-get install -y git
+git clone https://github.com/andreasschoeler93/Stoppuhr.git
+cd Stoppuhr
+bash deploy/install.sh
+```
+
+- Dienst: `sudo systemctl status stoppuhr`, Log: `journalctl -u stoppuhr -f`.
+- Update: `git pull && sudo systemctl restart stoppuhr`.
+- Die Daten liegen in Redis (`save 10 1`), nicht im Projektordner.
+- Konfiguriert wird über Umgebungsvariablen in `deploy/stoppuhr.service`
+  (`REDIS_HOST`, `REDIS_PORT`, `PORT`, `HEATS_XML_PATH`); die Voreinstellungen entsprechen Docker.
+- Zeitserver für die Taster: in `/etc/chrony/chrony.conf` `allow <Taster-Netz>` ergänzen
+  (ohne Internet zusätzlich `local stratum 10`), danach `sudo systemctl restart chrony`.
 
 ---
 

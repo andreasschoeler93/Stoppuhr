@@ -1,0 +1,19 @@
+[Unit]
+Description=Stoppuhr-Server (Flask)
+After=network-online.target redis-server.service
+Wants=network-online.target redis-server.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__DIR__/backend
+Environment=REDIS_HOST=127.0.0.1
+Environment=REDIS_PORT=6379
+Environment=PORT=1999
+Environment=HEATS_XML_PATH=__DIR__/results/heats.xml
+ExecStart=__DIR__/.venv/bin/python app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
