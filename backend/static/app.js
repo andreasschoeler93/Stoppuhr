@@ -133,7 +133,8 @@ async function loadButtons() {
   buttons = entries.map(({ t, role, lane }) => ({
     id: t.mac,
     mac: t.mac || "",
-    letter: t.name || "",
+    letter: t.letter || "?",
+    name: t.name || "",
     role,
     lane,
     last_seen_ms: t.last_seen_ts || null,
@@ -182,7 +183,7 @@ function renderButtonList() {
         <span>Taster ${escapeHtml(letter)}</span>
         <span class="taster-badge">${escapeHtml(slotLabel)}</span>
       </div>
-      <div class="taster-mac">${escapeHtml(btn.mac)}</div>
+      <div class="taster-mac">${escapeHtml(btn.name ? btn.name + " · " + btn.mac : btn.mac)}</div>
       <div class="small mt-1 text-muted">
         Akku: ${btn.battery_percent != null ? escapeHtml(btn.battery_percent) + "%" : "–"} |
         RSSI: ${btn.rssi_dbm != null ? escapeHtml(btn.rssi_dbm) + " dBm" : "–"}

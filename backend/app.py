@@ -50,7 +50,11 @@ class Vital(TypedDict):
     uptime_s: Optional[int]
 
 
-class Taster(TypedDict):
+TASTER_LETTERS = "ABCDEFGHIJ"
+
+
+class Taster(TypedDict, total=False):
+    letter: Optional[str]
     name: str
     mac: str
     ts: int
@@ -362,9 +366,15 @@ def api_post_taster():
         if existing.get("mac") == entry["mac"]:
             existing["name"] = entry["name"]
             existing["ts"] = entry["ts"]
+            entry = existing
             break
     else:
         st["tasters"].append(entry)
+
+    # Buchstaben in der Reihenfolge der Anmeldung vergeben (A-J, bleibt dauerhaft erhalten)
+    if not entry.get("letter"):
+        used = {t.get("letter") for t in st["tasters"]}
+        entry["letter"] = next((c for c in TASTER_LETTERS if c not in used), None)
 
     save_state(st)
     return jsonify({"ok": True, "taster": entry})
