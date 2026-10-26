@@ -123,23 +123,24 @@ function getSlotForButton(btnId) {
 function findButtonById(id) { return buttons.find(b => b.id === id) || null; }
 
 async function loadButtons() {
-  const data = await apiGet("/api/taster-list");
-  const tasters = data.tasters || [];
-  buttons = tasters.map((t, idx) => {
-    const letter = t.letter || "";
-    const id = t.id || ("T-" + (letter || String.fromCharCode(65 + (idx % 26))));
-    return {
-      id,
-      mac: t.mac || "",
-      letter,
-      role: t.role || "none",
-      lane: t.lane,
-      last_seen_ms: t.last_seen_ms || null,
-      last_event_type: t.last_event_type || null,
-      battery_percent: t.last_battery_percent ?? null,
-      rssi_dbm: t.last_rssi_dbm ?? null
-    };
+  const data = await apiGet("/api/mapping");
+  const entries = [];
+  if (data.starter) entries.push({ t: data.starter, role: "starter", lane: null });
+  Object.keys(data.mapping || {}).forEach(lane => {
+    if (data.mapping[lane]) entries.push({ t: data.mapping[lane], role: "bahn", lane });
   });
+  (data.unmapped_taster || []).forEach(t => entries.push({ t, role: "none", lane: null }));
+  buttons = entries.map(({ t, role, lane }) => ({
+    id: t.mac,
+    mac: t.mac || "",
+    letter: t.name || "",
+    role,
+    lane,
+    last_seen_ms: t.last_seen_ts || null,
+    last_event_type: null,
+    battery_percent: t.online ? (t.battery ?? null) : null,
+    rssi_dbm: t.online ? (t.rssi ?? null) : null
+  }));
 
   resetAssignments();
 
@@ -366,6 +367,11 @@ async function init() {
   // initial loads
   await refreshSystemStatus().catch(() => {});
   await loadButtons().catch(() => {});
+  // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
+  setInterval(() => {
+    if (document.querySelector(".taster-card.dragging")) return;
+    loadButtons().catch(() => {});
+  }, 5000);
   // keep suffix display in sync with settings input
   byId("suffixInput").addEventListener("input", () => { byId("suffixDisplay").value = byId("suffixInput").value; });
   byId("baseUrlInputSettings").addEventListener("input", () => { byId("baseUrlInput").value = byId("baseUrlInputSettings").value; });
