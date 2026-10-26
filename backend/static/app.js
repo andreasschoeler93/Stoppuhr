@@ -302,18 +302,18 @@ function renderButtonList() {
     const letter = btn.letter || "?";
     const assigned = btn.role === "starter" || (btn.role === "bahn" && btn.lane != null);
     const unassignHtml = assigned
-      ? `<button class="btn btn-sm btn-outline-secondary btn-unassign mt-1" data-lane="${btn.role === "starter" ? "starter" : escapeHtml(String(btn.lane))}">Entfernen</button>`
+      ? `<button class="btn btn-sm btn-outline-secondary btn-unassign" data-lane="${btn.role === "starter" ? "starter" : escapeHtml(String(btn.lane))}">Entfernen</button>`
       : "";
     div.innerHTML = `
       <div class="taster-header">
         <span>Taster ${escapeHtml(letter)}</span>
+        ${unassignHtml}
         <span class="taster-badge">${escapeHtml(slotLabel)}</span>
       </div>
       <div class="taster-mac">${escapeHtml(btn.name ? btn.name + " · " + btn.mac : btn.mac)}</div>
       <div class="small mt-1 text-muted">
         ${escapeHtml(vitalsText(btn))}
       </div>
-      ${unassignHtml}
     `;
 
     div.addEventListener("dragstart", ev => {
@@ -469,6 +469,18 @@ async function init() {
   byId("laufSelect").addEventListener("change", (e) => {
     currentRun = e.target.value;
     renderLanesTable();
+  });
+
+  byId("btnSetRun").addEventListener("click", async () => {
+    const run = byId("laufSelect").value;
+    if (!run) return;
+    if (!confirm(`Lauf ${run} als aktuellen Lauf übernehmen?\nGemessene Zeiten ab Lauf ${run} werden verworfen.`)) return;
+    try {
+      await apiPost("/api/current-run", { run: Number(run) });
+      await loadRunStatus();
+    } catch (e) {
+      alert("Übernehmen fehlgeschlagen: " + e.message);
+    }
   });
 
   byId("btnReloadStartcards").addEventListener("click", async () => {

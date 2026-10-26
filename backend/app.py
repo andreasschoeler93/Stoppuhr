@@ -922,6 +922,27 @@ def api_get_run_status():
     )
 
 
+@app.post("/api/current-run")
+def api_post_current_run():
+    """Setzt den aktuellen Lauf; Messungen ab diesem Lauf werden verworfen (werden neu gemessen)."""
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    try:
+        run = int(payload.get("run"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid run"}), 400
+    if run < 1:
+        return jsonify({"ok": False, "error": "invalid run"}), 400
+    triggers = st.get("triggers_per_run") or {}
+    for key in [k for k in triggers if str(k).isdigit() and int(k) >= run]:
+        del triggers[key]
+    st["triggers_per_run"] = triggers
+    st["current_run"] = run
+    st["run_finished_ts"] = None
+    save_state(st)
+    return jsonify({"ok": True, "current_run": run})
+
+
 @app.post("/api/test/reset-run")
 def api_test_reset_run():
     """Nur zum Testen: Messung des aktuellen Laufs verwerfen."""
