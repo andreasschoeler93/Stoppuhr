@@ -14,6 +14,7 @@ import re
 import socket
 import struct
 import time
+import unicodedata
 import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
@@ -756,6 +757,113 @@ def api_post_triggers():
             },
         }
     )
+
+
+_UMLAUTE = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
+
+
+def _ascii(text: Any, limit: int = 30) -> str:
+    """Text fuer das Taster-Display: nur ASCII (die Display-Schrift kennt keine Umlaute)."""
+    s = "".join(_UMLAUTE.get(ch, ch) for ch in str(text or ""))
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+    return s.replace('"', "").replace("\\", "").strip()[:limit]
+
+
+def _lane_time(presses: Optional[dict[str, Any]], lane: str) -> Optional[int]:
+    """Gestoppte Zeit (ms) einer Bahn in einem Lauf, None wenn nicht gestoppt/nicht gestartet."""
+    starter = (presses or {}).get(STARTER_KEY)
+    press = (presses or {}).get(lane)
+    if not starter or not press:
+        return None
+    return max(0, int(press["ts"]) - int(starter["ts"]))
+
+
+@app.get("/api/display")
+def api_get_display():
+    """
+    Anzeigedaten fuer ein Taster-Display (GET /api/display?mac=...).
+
+    role: none | starter | lane. state: ready | running | stopped | inactive.
+    elapsed_ms: Laufzeit seit dem Start (nur state running), time_ms: gestoppte Zeit.
+    last_*: letzter abgeschlossener Lauf (bei Bahn: letzte Zeit dieser Bahn).
+    """
+    st = load_state()
+    _maybe_advance_run(st)
+    mac = request.args.get("mac", "").strip()
+    lane = _lane_for_mac(st, mac) if mac else None
+    run = int(st.get("current_run") or 0)
+    cards = (st.get("startcards_per_run") or {}).get(str(run), [])
+    all_presses = st.get("triggers_per_run") or {}
+    presses = all_presses.get(str(run)) or {}
+    starter = presses.get(STARTER_KEY)
+    now = now_ms()
+    finished = st.get("run_finished_ts") is not None
+
+    out: dict[str, Any] = {
+        "role": "none",
+        "lane": None,
+        "run": run,
+        "state": "ready",
+        "server_now": now,
+        "elapsed_ms": None,
+        "time_ms": None,
+        "name": "",
+        "discipline": "",
+        "last_ms": None,
+        "last_name": "",
+        "last_run": None,
+    }
+    if lane is None:
+        return jsonify(out)
+
+    previous_runs = sorted((int(r) for r in all_presses if int(r) < run), reverse=True)
+
+    if lane == STARTER_KEY:
+        out["role"] = "starter"
+        out["name"] = _ascii(f"{len(cards)} Schwimmer") if cards else ""
+        out["discipline"] = _ascii(cards[0].get("Disziplin")) if cards else ""
+        if starter:
+            if finished:
+                times = [t for ln in presses if ln != STARTER_KEY
+                         if (t := _lane_time(presses, ln)) is not None]
+                out["state"] = "stopped"
+                out["time_ms"] = max(times) if times else 0
+            else:
+                out["state"] = "running"
+                out["elapsed_ms"] = max(0, now - int(starter["ts"]))
+        for r in previous_runs:
+            times = [t for ln in all_presses[str(r)] if ln != STARTER_KEY
+                     if (t := _lane_time(all_presses[str(r)], ln)) is not None]
+            if times:
+                out["last_ms"], out["last_run"] = max(times), r
+                break
+        return jsonify(out)
+
+    out["role"] = "lane"
+    out["lane"] = int(lane) if str(lane).isdigit() else None
+    card = next((c for c in cards if str(c.get("Bahn")) == str(lane)), None)
+    if card is None:
+        out["state"] = "inactive"
+        out["name"] = "frei"
+    else:
+        out["name"] = _ascii(card.get("Name"))
+        out["discipline"] = _ascii(card.get("Disziplin"))
+        stopped = _lane_time(presses, str(lane))
+        if stopped is not None:
+            out["state"], out["time_ms"] = "stopped", stopped
+        elif starter:
+            out["state"] = "running"
+            out["elapsed_ms"] = max(0, now - int(starter["ts"]))
+    for r in previous_runs:
+        t = _lane_time(all_presses[str(r)], str(lane))
+        if t is not None:
+            prev_card = next(
+                (c for c in (st.get("startcards_per_run") or {}).get(str(r), [])
+                 if str(c.get("Bahn")) == str(lane)), None)
+            out["last_ms"], out["last_run"] = t, r
+            out["last_name"] = _ascii((prev_card or {}).get("Name"))
+            break
+    return jsonify(out)
 
 
 @app.get("/api/run-status")
