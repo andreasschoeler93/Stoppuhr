@@ -519,6 +519,45 @@ async function init() {
   byId("suffixDisplay").value = byId("suffixInput").value;
   byId("baseUrlInput").addEventListener("input", () => { byId("baseUrlInputSettings").value = byId("baseUrlInput").value; });
 
+  // Live-Ansicht des Exports (/legacy/heats.xml), wie ihn JAuswertung abholt
+  let exportTimer = null;
+  const fmtMs = ms => {
+    const cs = Math.floor(ms / 10);
+    const pad = (n, l = 2) => String(n).padStart(l, "0");
+    return `${pad(Math.floor(cs / 6000))}:${pad(Math.floor(cs / 100) % 60)},${pad(cs % 100)}`;
+  };
+  async function refreshExport() {
+    try {
+      const res = await fetch("/legacy/heats.xml", { cache: "no-store" });
+      const text = await res.text();
+      byId("exportRaw").textContent = text;
+      const doc = new DOMParser().parseFromString(text, "application/xml");
+      if (doc.querySelector("parsererror")) throw new Error("XML nicht lesbar");
+      const rows = [];
+      doc.querySelectorAll("AlphaServer\\.Heat").forEach(h => {
+        const ev = h.querySelector(":scope > event")?.textContent;
+        const heat = h.querySelector(":scope > heat")?.textContent;
+        h.querySelectorAll(":scope > lanes > entry").forEach(e => {
+          const idx = Number(e.querySelector("laneindex")?.textContent);
+          const ms = Number(e.querySelector("times > long")?.textContent);
+          rows.push(`<tr><td>${ev}</td><td>${heat}</td><td>${idx + 1}</td><td>${fmtMs(ms)}</td><td>${ms}</td></tr>`);
+        });
+      });
+      byId("exportRows").innerHTML = rows.join("") || `<tr><td colspan="5" class="text-muted">Noch keine Zeiten im Export.</td></tr>`;
+      const heats = doc.querySelectorAll("AlphaServer\\.Heat").length;
+      byId("exportInfo").textContent = `${heats} Lauf/Läufe, aktualisiert ${new Date().toLocaleTimeString()} (Bahn = Anzeige 1-basiert, im XML ab 0)`;
+    } catch (e) {
+      byId("exportInfo").textContent = `Fehler: ${e.message}`;
+    }
+  }
+  byId("btnToggleExport").addEventListener("click", () => {
+    const view = byId("exportView");
+    const open = view.classList.toggle("d-none") === false;
+    byId("btnToggleExport").textContent = open ? "Live-Ansicht schließen" : "Live-Ansicht öffnen";
+    clearInterval(exportTimer);
+    if (open) { refreshExport(); exportTimer = setInterval(refreshExport, 2000); }
+  });
+
   // JAuswertung haengt Port 1999 und /legacy/heats.xml selbst an: eingetragen wird nur die IP
   byId("alphaServerValue").value = location.hostname;
   byId("alphaServerUrl").textContent = `http://${location.hostname}:1999/legacy/heats.xml`;

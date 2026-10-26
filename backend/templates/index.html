@@ -166,6 +166,28 @@
 
       <div class="card mb-3">
         <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h6 mb-0">Export für JAuswertung (live)</h2>
+            <button class="btn btn-outline-secondary btn-sm" type="button" id="btnToggleExport">Live-Ansicht öffnen</button>
+          </div>
+          <div id="exportView" class="d-none">
+            <div class="text-muted small mb-2" id="exportInfo"></div>
+            <div class="table-responsive" style="max-height: 320px; overflow:auto;">
+              <table class="table table-sm table-striped mb-2">
+                <thead><tr><th>Wettkampf</th><th>Lauf</th><th>Bahn</th><th>Zeit</th><th>ms</th></tr></thead>
+                <tbody id="exportRows"></tbody>
+              </table>
+            </div>
+            <details>
+              <summary class="small">Rohes XML</summary>
+              <pre class="small mb-0" style="max-height: 240px; overflow:auto;" id="exportRaw"></pre>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
           <h2 class="h6 mb-3">Startkarten-Datei</h2>
           <div class="row g-3 align-items-end">
             <div class="col-md-6">
