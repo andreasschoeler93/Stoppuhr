@@ -161,6 +161,11 @@
               <input type="text" id="suffixInput" class="form-control" value="/export/CSV/Startkarten.csv">
               <div class="form-text">Typisch: <code>/export/CSV/Startkarten.csv</code></div>
             </div>
+            <div class="col-md-6">
+              <label class="form-label">Automatisch zum nächsten Lauf nach (Sekunden)</label>
+              <input type="number" min="0" step="1" id="autoNextInput" class="form-control" value="10">
+              <div class="form-text">Wartezeit, nachdem alle Bahnen gestoppt sind. Ein Druck auf den Starter wechselt sofort.</div>
+            </div>
             <div class="col-12 d-flex gap-2 align-items-center">
               <button class="btn btn-primary btn-sm" id="btnSaveSettings">Speichern</button>
               <span class="text-success small d-none" id="settingsSavedMsg">Gespeichert.</span>

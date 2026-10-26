@@ -103,6 +103,7 @@ def _default_state() -> State:
         "settings": {
             "startcards_base_url": "",
             "startcards_suffix": "/export/CSV/Startkarten.csv",
+            "auto_next_run_s": "10",
         },
         "startcards": {
             "loaded": False,
@@ -141,6 +142,27 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _auto_next_delay_ms(st: State) -> int:
+    """Wartezeit bis zum automatischen Wechsel in den naechsten Lauf (Einstellung, Standard 10 s)."""
+    try:
+        return max(0, int(st.get("settings", {}).get("auto_next_run_s", 10))) * 1000
+    except (TypeError, ValueError):
+        return 10_000
+
+
+def _advance_run(st: State) -> None:
+    st["current_run"] = int(st.get("current_run") or 0) + 1
+    st["run_finished_ts"] = None
+    save_state(st)
+
+
+def _maybe_advance_run(st: State) -> None:
+    """Springt in den naechsten Lauf, wenn der abgeschlossene Lauf lange genug angezeigt wurde."""
+    finished = st.get("run_finished_ts")
+    if finished is not None and now_ms() - int(finished) >= _auto_next_delay_ms(st):
+        _advance_run(st)
+
+
 @app.get("/")
 def index() -> str:
     return render_template("index.html", version=APP_VERSION)
@@ -170,6 +192,11 @@ def api_set_settings() -> ResponseReturnValue:
     for k in ["startcards_base_url", "startcards_suffix"]:
         if k in payload:
             settings[k] = str(payload[k] or "")
+    if "auto_next_run_s" in payload:
+        try:
+            settings["auto_next_run_s"] = str(max(0, int(payload["auto_next_run_s"])))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "auto_next_run_s must be a number"}), 400
     st["settings"] = settings
     save_state(st)
     return jsonify({"ok": True, "settings": settings})
@@ -335,6 +362,14 @@ def api_post_vitals():
         "uptime_s": payload.get("uptime_s"),
     }
     st["vitals"][mac] = new_vital
+    # Uhrversatz Taster -> Server lernen (Server-Zeit minus Taster-Zeit); Sprung nach unten
+    # sofort uebernehmen (geringste Latenz), nach oben nur langsam (Netzwerkjitter).
+    clock_ms = payload.get("clock_ms")
+    if isinstance(clock_ms, (int, float)) and clock_ms > 1_700_000_000_000:
+        offsets = st.setdefault("clock_offsets", {})
+        new_off = now_ms() - int(clock_ms)
+        old = offsets.get(mac)
+        offsets[mac] = new_off if old is None or new_off < old else int(old + (new_off - old) * 0.1)
     save_state(st)
     return jsonify({"ok": True, "vital": new_vital})
 
@@ -642,6 +677,7 @@ def api_post_triggers():
       { ok: true, press: {ts, run, mac} }
     """
     st = load_state()
+    _maybe_advance_run(st)
     payload = request.get_json(force=True, silent=True) or {}
 
     mac = payload.get("mac")
@@ -659,13 +695,22 @@ def api_post_triggers():
     if test_lane is not None:
         mac_norm = "test"
         lane = str(test_lane)
+        ts_val = now_ms()
     else:
         mac_norm = str(mac).strip()
         lane = _lane_for_mac(st, mac_norm)
+        # Zeitstempel des Tasters auf die Serveruhr umrechnen
+        ts_val += int((st.get("clock_offsets") or {}).get(mac_norm, 0))
 
     if lane is None:
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
+    # Starter-Druck nach abgeschlossenem Lauf startet sofort den naechsten Lauf
+    if lane == STARTER_KEY and st.get("run_finished_ts") is not None:
+        _advance_run(st)
+        current_run = st["current_run"]
+
+    lanes_in_run = [v["Bahn"] for v in st.get("startcards_per_run", {}).get(str(current_run), [])]
     triggers_per_run = st.get("triggers_per_run", dict)
     triggers_per_run.setdefault(str(current_run), {})
     triggers_per_run[str(current_run)].setdefault(lane, None)
@@ -678,9 +723,7 @@ def api_post_triggers():
     if triggers_per_run[str(current_run)][lane]:
         return jsonify({"ok": False, "error": "Double press detected."}), 400
     # Reject lanes which are not in the current run, except STARTER
-    if lane != STARTER_KEY and lane not in (
-        v["Bahn"] for v in st["startcards_per_run"][str(current_run)]
-    ):
+    if lane != STARTER_KEY and lane not in lanes_in_run:
         abort(400, description=f"Lane {lane} is not in the current run.")
     press: PressEvent = {
         "ts": ts_val,
@@ -691,11 +734,8 @@ def api_post_triggers():
     st["triggers_per_run"] = triggers_per_run
     save_state(st)
     # Check, if for all lanes presses have been received
-    if not (
-        set([v["Bahn"] for v in st["startcards_per_run"][str(current_run)]])
-        - set(triggers_per_run[str(current_run)].keys())
-    ):
-        logger.info(f"All lanes have been pressed: start run: {int(current_run) + 1}")
+    if lanes_in_run and not (set(lanes_in_run) - set(triggers_per_run[str(current_run)].keys())):
+        logger.info(f"All lanes have been pressed in run {current_run}")
         lane_times = determine_lane_times_per_run()
         logger.info(lane_times)
         lane_xml = create_xml_heats(lane_times)
@@ -703,8 +743,8 @@ def api_post_triggers():
         with open(HEATS_XML_PATH, "w") as f:
             f.write(lane_xml)
             print(f"Wrote results file to {HEATS_XML_PATH}")
-        # Increase run number
-        st["current_run"] = int(current_run) + 1
+        # Nach der eingestellten Wartezeit in den naechsten Lauf wechseln
+        st["run_finished_ts"] = now_ms()
     save_state(st)
     return jsonify(
         {
@@ -722,6 +762,7 @@ def api_post_triggers():
 def api_get_run_status():
     """Aktueller Lauf sowie je Lauf Starter-Zeitstempel und gemessene Zeiten (ms) je Bahn."""
     st = load_state()
+    _maybe_advance_run(st)
     runs: dict[str, Any] = {}
     for run, presses in (st.get("triggers_per_run") or {}).items():
         starter = (presses or {}).get(STARTER_KEY)
@@ -733,7 +774,18 @@ def api_get_run_status():
                     continue
                 times[str(lane)] = press["ts"] - starter_ts
         runs[str(run)] = {"started": starter_ts is not None, "starter_ts": starter_ts, "times_ms": times}
-    return jsonify({"current_run": st.get("current_run"), "server_now": now_ms(), "runs": runs})
+    finished = st.get("run_finished_ts")
+    next_in = None
+    if finished is not None:
+        next_in = max(0, _auto_next_delay_ms(st) - (now_ms() - int(finished))) / 1000
+    return jsonify(
+        {
+            "current_run": st.get("current_run"),
+            "server_now": now_ms(),
+            "next_run_in_s": next_in,
+            "runs": runs,
+        }
+    )
 
 
 @app.post("/api/test/reset-run")
@@ -742,6 +794,7 @@ def api_test_reset_run():
     st = load_state()
     run = str(st.get("current_run"))
     (st.get("triggers_per_run") or {}).pop(run, None)
+    st["run_finished_ts"] = None
     save_state(st)
     return jsonify({"ok": True, "run": run})
 

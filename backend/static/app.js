@@ -55,6 +55,7 @@ async function loadSettingsIntoUI() {
   byId("baseUrlInputSettings").value = s.startcards_base_url || "";
   byId("suffixInput").value = s.startcards_suffix || "/export/CSV/Startkarten.csv";
   byId("suffixDisplay").value = byId("suffixInput").value;
+  byId("autoNextInput").value = s.auto_next_run_s ?? "10";
 }
 
 async function loadStartcardsFromBackend() {
@@ -187,12 +188,26 @@ function renderStarter() {
 // Messergebnisse des Servers (Zeiten je Lauf und Bahn)
 let runStatus = { current_run: null, runs: {} };
 let serverOffsetMs = 0; // Serverzeit minus Browserzeit
+let lastServerRun = null;
 
 async function loadRunStatus() {
   const t0 = Date.now();
   runStatus = await apiGet("/api/run-status");
   if (runStatus.server_now) serverOffsetMs = runStatus.server_now - (t0 + Date.now()) / 2;
-  byId("serverRunLabel").textContent = "Server-Lauf: " + (runStatus.current_run ?? "–");
+  let label = "Server-Lauf: " + (runStatus.current_run ?? "–");
+  if (runStatus.next_run_in_s != null) label += ` · nächster Lauf in ${Math.ceil(runStatus.next_run_in_s)} s`;
+  byId("serverRunLabel").textContent = label;
+  // Anzeige folgt dem Lauf des Servers, wenn dieser wechselt
+  const serverRun = String(runStatus.current_run ?? "");
+  if (lastServerRun !== null && serverRun !== lastServerRun && serverRun) {
+    const sel = byId("laufSelect");
+    if ([...sel.options].some(o => o.value === serverRun)) {
+      sel.value = serverRun;
+      currentRun = serverRun;
+      renderLanesTable();
+    }
+  }
+  lastServerRun = serverRun;
   updateClocks();
 }
 
@@ -459,7 +474,11 @@ async function init() {
     const baseUrl = byId("baseUrlInputSettings").value.trim();
     const suffix = byId("suffixInput").value.trim();
     try {
-      await apiPost("/api/settings", { startcards_base_url: baseUrl, startcards_suffix: suffix });
+      await apiPost("/api/settings", {
+        startcards_base_url: baseUrl,
+        startcards_suffix: suffix,
+        auto_next_run_s: byId("autoNextInput").value
+      });
       // mirror to main tab
       await loadSettingsIntoUI();
       const msg = byId("settingsSavedMsg");
