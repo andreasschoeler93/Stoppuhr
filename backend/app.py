@@ -958,6 +958,7 @@ def _write_heats_xml(st: State) -> str:
 
 
 @app.route("/legacy/heats.xml")
+@app.route("/heats.xml")
 def serve_heats_xml():
     # Immer aus dem aktuellen Stand erzeugen, damit JAuswertung nie veraltete Zeiten abholt
     return Response(
