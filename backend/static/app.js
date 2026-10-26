@@ -168,6 +168,15 @@ async function loadButtons() {
   byId("tasterLastRefresh").textContent = "Letzte Aktualisierung: " + new Date().toLocaleTimeString();
 }
 
+async function unassignLane(lane) {
+  try {
+    await apiPost("/api/unassign", { lane: String(lane) });
+    await loadButtons();
+  } catch (e) {
+    alert("Entfernen fehlgeschlagen: " + e.message);
+  }
+}
+
 function vitalsText(btn) {
   if (!btn || !btn.online) return "offline";
   const parts = [];
@@ -406,7 +415,10 @@ function renderLanesTable() {
       <td>${escapeHtml(name)}</td>
       <td>${escapeHtml(startnr)}</td>
       <td>${escapeHtml(disz)}</td>
-      <td><div class="drop-target" data-lane="${b}">${tasterHtml}</div></td>
+      <td><div class="d-flex align-items-center gap-2">
+        <div class="drop-target flex-grow-1" data-lane="${b}">${tasterHtml}</div>
+        ${(activeBtn || pendingBtn) ? `<button class="btn btn-sm btn-outline-secondary btn-unassign" data-lane="${b}">Entfernen</button>` : ""}
+      </div></td>
       <td class="lane-time" data-lane="${b}" data-active="${r ? 1 : 0}">–</td>
     `;
     tbody.appendChild(tr);
@@ -491,6 +503,12 @@ async function init() {
     }
   });
 
+  byId("btnClearStarter").addEventListener("click", () => unassignLane("starter"));
+  byId("bahnenTableBody").addEventListener("click", ev => {
+    const b = ev.target.closest(".btn-unassign");
+    if (b) unassignLane(b.dataset.lane);
+  });
+
   byId("btnRefreshTaster").addEventListener("click", () => loadButtons().catch(e => alert("Taster laden fehlgeschlagen: " + e.message)));
   byId("btnRefreshStatus").addEventListener("click", () => refreshSystemStatus().catch(e => alert("Status laden fehlgeschlagen: " + e.message)));
 
@@ -506,8 +524,6 @@ async function init() {
     currentRun = serverRun;
     renderLanesTable();
   }
-  byId("btnClearStarter").addEventListener("click", () =>
-    apiPost("/api/unassign", { lane: "starter" }).then(() => loadButtons()).catch(e => alert(e.message)));
   setInterval(() => { loadRunStatus().catch(() => {}); }, 500);
   setInterval(updateClocks, 50);
   // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
