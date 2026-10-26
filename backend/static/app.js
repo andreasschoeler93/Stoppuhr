@@ -212,7 +212,16 @@ function attachDropTargets() {
       target.classList.remove("drop-hover");
       const btnId = ev.dataTransfer.getData("text/plain");
       const lane = target.getAttribute("data-lane");
-      if (lane) assignButtonToLane(btnId, Number(lane));
+      if (!lane) return;
+      // Zuordnung auf dem Server speichern, danach Serverstand neu laden
+      const btn = findButtonById(btnId);
+      if (btn && btn.mac) {
+        apiPost("/api/assign", { mac: btn.mac, lane: Number(lane) })
+          .then(() => loadButtons())
+          .catch(e => alert("Zuordnung speichern fehlgeschlagen: " + e.message));
+      } else {
+        assignButtonToLane(btnId, Number(lane));
+      }
     });
   });
 }
