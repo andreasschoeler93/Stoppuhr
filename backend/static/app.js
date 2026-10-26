@@ -161,6 +161,7 @@ async function loadButtons() {
   });
 
   renderButtonList();
+  renderStarter();
   renderLanesTable();
   byId("tasterLastRefresh").textContent = "Letzte Aktualisierung: " + new Date().toLocaleTimeString();
 }
@@ -173,6 +174,61 @@ function vitalsText(btn) {
   if (btn.temp != null) parts.push(Number(btn.temp).toFixed(1) + " °C");
   if (btn.humidity != null) parts.push(Number(btn.humidity).toFixed(0) + " % rF");
   return parts.join(" · ");
+}
+
+function renderStarter() {
+  const box = byId("starterDrop");
+  const s = buttons.find(b => b.role === "starter");
+  box.innerHTML = s
+    ? `<strong>Taster ${escapeHtml(s.letter || "?")}</strong> <span class="small text-muted">${escapeHtml(s.name)} · ${escapeHtml(vitalsText(s))}</span>`
+    : `<span class="text-muted small">kein Starter – Taster hierher ziehen</span>`;
+}
+
+// Messergebnisse des Servers (Zeiten je Lauf und Bahn)
+let runStatus = { current_run: null, runs: {} };
+
+async function loadRunStatus() {
+  runStatus = await apiGet("/api/run-status");
+  byId("serverRunLabel").textContent = "Server-Lauf: " + (runStatus.current_run ?? "–");
+  if (!document.querySelector(".taster-card.dragging")) renderLanesTable();
+}
+
+function formatMs(ms) {
+  if (ms == null) return "–";
+  return (ms / 1000).toFixed(2) + " s";
+}
+
+// TESTBEREICH: Tastendruck ohne echten Taster ausloesen (spaeter entfernen)
+function renderTestButtons() {
+  const box = byId("testButtons");
+  box.innerHTML = "";
+  const mk = (label, cls, handler) => {
+    const b = document.createElement("button");
+    b.className = "btn btn-sm " + cls;
+    b.textContent = label;
+    b.addEventListener("click", handler);
+    box.appendChild(b);
+  };
+  const press = async (lane) => {
+    const msg = byId("testMessage");
+    try {
+      await apiPost("/api/triggers", { test_lane: lane });
+      msg.textContent = `Bahn/Starter „${lane}“ gedrückt.`;
+      msg.className = "small mt-2 text-success";
+    } catch (e) {
+      msg.textContent = `„${lane}“: ${e.message}`;
+      msg.className = "small mt-2 text-danger";
+    }
+    loadRunStatus().catch(() => {});
+  };
+  mk("Start", "btn-success", () => press("starter"));
+  for (let b = 1; b <= maxLane; b++) mk("Bahn " + b, "btn-outline-primary", () => press(String(b)));
+  mk("Messung zurücksetzen", "btn-outline-danger", async () => {
+    await apiPost("/api/test/reset-run", {}).catch(() => {});
+    byId("testMessage").textContent = "Messung des Server-Laufs zurückgesetzt.";
+    byId("testMessage").className = "small mt-2 text-muted";
+    loadRunStatus().catch(() => {});
+  });
 }
 
 function renderButtonList() {
@@ -230,7 +286,7 @@ function attachDropTargets() {
       // Zuordnung auf dem Server speichern, danach Serverstand neu laden
       const btn = findButtonById(btnId);
       if (btn && btn.mac) {
-        apiPost("/api/assign", { mac: btn.mac, lane: Number(lane) })
+        apiPost("/api/assign", { mac: btn.mac, lane: lane === "starter" ? "starter" : Number(lane) })
           .then(() => loadButtons())
           .catch(e => alert("Zuordnung speichern fehlgeschlagen: " + e.message));
       } else {
@@ -308,6 +364,7 @@ function renderLanesTable() {
       <td>${escapeHtml(startnr)}</td>
       <td>${escapeHtml(disz)}</td>
       <td><div class="drop-target" data-lane="${b}">${tasterHtml}</div></td>
+      <td>${escapeHtml(formatMs(((runStatus.runs[String(currentRun)] || {}).times_ms || {})[String(b)]))}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -391,6 +448,18 @@ async function init() {
   // initial loads
   await refreshSystemStatus().catch(() => {});
   await loadButtons().catch(() => {});
+  renderTestButtons();
+  await loadRunStatus().catch(() => {});
+  // Beim Start den Lauf anzeigen, der auf dem Server aktuell ist
+  const serverRun = String(runStatus.current_run ?? "");
+  if (serverRun && [...byId("laufSelect").options].some(o => o.value === serverRun)) {
+    byId("laufSelect").value = serverRun;
+    currentRun = serverRun;
+    renderLanesTable();
+  }
+  byId("btnClearStarter").addEventListener("click", () =>
+    apiPost("/api/unassign", { lane: "starter" }).then(() => loadButtons()).catch(e => alert(e.message)));
+  setInterval(() => { loadRunStatus().catch(() => {}); }, 2000);
   // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
   setInterval(() => {
     if (document.querySelector(".taster-card.dragging")) return;

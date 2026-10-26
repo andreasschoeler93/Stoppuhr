@@ -96,6 +96,11 @@
                 <h2 class="h6 mb-0">Bahnen</h2>
                 <div class="text-muted small">Max. Bahnen: <span id="maxLaneLabel">–</span></div>
               </div>
+              <div class="d-flex align-items-center mb-2 gap-2">
+                <strong>Starter:</strong>
+                <div id="starterDrop" class="drop-target flex-grow-1" data-lane="starter"></div>
+                <button class="btn btn-sm btn-outline-secondary" id="btnClearStarter">Entfernen</button>
+              </div>
               <div class="table-responsive">
                 <table class="table table-sm table-striped align-middle">
                   <thead>
@@ -105,12 +110,23 @@
                       <th style="width:10%">Startnr</th>
                       <th>Disziplin</th>
                       <th style="width:22%">Taster</th>
+                      <th style="width:12%">Zeit</th>
                     </tr>
                   </thead>
                   <tbody id="bahnenTableBody"></tbody>
                 </table>
               </div>
               <div class="text-muted small" id="bahnenFooter"></div>
+
+              <!-- TESTBEREICH: kann spaeter entfernt werden -->
+              <div class="border rounded p-2 mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <strong class="small">Test ohne Taster</strong>
+                  <span class="small text-muted" id="serverRunLabel">Server-Lauf: –</span>
+                </div>
+                <div id="testButtons" class="d-flex flex-wrap gap-1"></div>
+                <div class="small mt-2" id="testMessage"></div>
+              </div>
             </div>
           </div>
         </div>

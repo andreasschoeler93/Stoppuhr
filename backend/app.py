@@ -645,7 +645,9 @@ def api_post_triggers():
     payload = request.get_json(force=True, silent=True) or {}
 
     mac = payload.get("mac")
-    if not mac:
+    # Testbetrieb: Taster-Druck ohne echten Taster fuer eine Bahn/den Starter ausloesen
+    test_lane = payload.get("test_lane")
+    if not mac and test_lane is None:
         return jsonify({"ok": False, "error": "missing mac"}), 400
 
     current_run = st.get("current_run")
@@ -654,8 +656,12 @@ def api_post_triggers():
 
     ts_val = int(payload.get("ts", now_ms()))
 
-    mac_norm = str(mac).strip()
-    lane = _lane_for_mac(st, mac_norm)
+    if test_lane is not None:
+        mac_norm = "test"
+        lane = str(test_lane)
+    else:
+        mac_norm = str(mac).strip()
+        lane = _lane_for_mac(st, mac_norm)
 
     if lane is None:
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
@@ -710,6 +716,34 @@ def api_post_triggers():
             },
         }
     )
+
+
+@app.get("/api/run-status")
+def api_get_run_status():
+    """Aktueller Lauf sowie je Lauf Starter-Zeitstempel und gemessene Zeiten (ms) je Bahn."""
+    st = load_state()
+    runs: dict[str, Any] = {}
+    for run, presses in (st.get("triggers_per_run") or {}).items():
+        starter = (presses or {}).get(STARTER_KEY)
+        starter_ts = starter.get("ts") if starter else None
+        times: dict[str, int] = {}
+        if isinstance(starter_ts, int):
+            for lane, press in presses.items():
+                if lane == STARTER_KEY or not press:
+                    continue
+                times[str(lane)] = press["ts"] - starter_ts
+        runs[str(run)] = {"started": starter_ts is not None, "starter_ts": starter_ts, "times_ms": times}
+    return jsonify({"current_run": st.get("current_run"), "runs": runs})
+
+
+@app.post("/api/test/reset-run")
+def api_test_reset_run():
+    """Nur zum Testen: Messung des aktuellen Laufs verwerfen."""
+    st = load_state()
+    run = str(st.get("current_run"))
+    (st.get("triggers_per_run") or {}).pop(run, None)
+    save_state(st)
+    return jsonify({"ok": True, "run": run})
 
 
 @app.route("/legacy/heats.xml")
