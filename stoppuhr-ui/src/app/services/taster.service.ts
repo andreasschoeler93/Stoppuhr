@@ -7,6 +7,11 @@ export interface Taster {
   mac: string;
   ts: number;
   stopwatch_ms: number | null;
+  // Vitaldaten aus /api/mapping (null, solange der Taster noch nichts gesendet hat)
+  battery?: number | null;
+  rssi?: number | null;
+  vbat?: number | null;
+  online?: boolean;
 }
 
 export interface MappingResponse {

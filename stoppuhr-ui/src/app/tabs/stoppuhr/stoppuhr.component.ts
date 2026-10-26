@@ -10,8 +10,8 @@ import {MatButtonModule} from '@angular/material/button';
 import {MatSelectModule} from '@angular/material/select';
 import {StatusService} from '../../services/status.service';
 import {JAuswertungService} from '../../services/jauswertung.service';
-import {TasterService} from '../../services/taster.service';
-import {TasterCardComponent} from '../../component/taster-card/taster-card.component';
+import {TasterService, Taster} from '../../services/taster.service';
+import {TasterCardComponent, TasterVitals} from '../../component/taster-card/taster-card.component';
 
 @Component({
   selector: 'app-stoppuhr',
@@ -147,6 +147,15 @@ export class StoppuhrComponent {
       },
       error: (err) => console.error('Assignment failed', err)
     });
+  }
+
+  /** Vitaldaten fuer die Kachel; ohne aktuelle Meldung (offline) werden keine alten Werte gezeigt. */
+  vitalsOf(taster: Taster | null | undefined): TasterVitals | undefined {
+    if (!taster || !taster.online) return undefined;
+    return {
+      batteryPercent: taster.battery ?? undefined,
+      rssiDbm: taster.rssi ?? undefined,
+    };
   }
 
   removeTasterFromLane(lane: string) {

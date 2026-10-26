@@ -44,6 +44,10 @@ class Vital(TypedDict):
     temp: float
     humidity: float
     ts: int
+    vbat: Optional[float]
+    rssi: Optional[int]
+    fw: Optional[str]
+    uptime_s: Optional[int]
 
 
 class Taster(TypedDict):
@@ -104,14 +108,7 @@ def _default_state() -> State:
             "last_error": None,
             "url": None,
         },
-        "tasters": [
-            {"name": "A", "mac": "AA:BB:CC:DD:EE:00", "ts": 0, "stopwatch_ms": None},
-            {"name": "B", "mac": "AA:BB:CC:DD:EE:01", "ts": 0, "stopwatch_ms": None},
-            {"name": "C", "mac": "AA:BB:CC:DD:EE:02", "ts": 0, "stopwatch_ms": None},
-            {"name": "D", "mac": "AA:BB:CC:DD:EE:03", "ts": 0, "stopwatch_ms": None},
-            {"name": "E", "mac": "AA:BB:CC:DD:EE:04", "ts": 0, "stopwatch_ms": None},
-            {"name": "F", "mac": "AA:BB:CC:DD:EE:05", "ts": 0, "stopwatch_ms": None},
-        ],
+        "tasters": [],  # Taster melden sich selbst per POST /api/taster an
         "results": {},
         "assignments": {"mapping": {}, "last_update_ts": None},
         "vitals": {},  # Maps the mac address to the vitals
@@ -186,13 +183,33 @@ def api_get_assignments():
     return jsonify(st["assignments"])
 
 
+TASTER_ONLINE_TIMEOUT_MS: Final[int] = 30_000
+
+
+def _taster_with_vitals(taster: Taster, vitals: dict[str, Vital]) -> dict[str, Any]:
+    """Taster-Eintrag um Vitaldaten und Online-Status (anhand des letzten Vitals-ts) ergaenzen."""
+    v = vitals.get(taster.get("mac")) or {}
+    last_seen = v.get("ts")
+    return {
+        **taster,
+        "battery": v.get("battery"),
+        "rssi": v.get("rssi"),
+        "vbat": v.get("vbat"),
+        "temp": v.get("temp"),
+        "humidity": v.get("humidity"),
+        "fw": v.get("fw"),
+        "last_seen_ts": last_seen,
+        "online": bool(last_seen) and now_ms() - int(last_seen) <= TASTER_ONLINE_TIMEOUT_MS,
+    }
+
+
 @app.get("/api/mapping")
 def get_mapping():
     st = load_state()
     max_lane = st.get("startcards", {}).get("max_lane", 0)
     current_mapping = st.get("assignments", {}).get("mapping", {})
 
-    tasters = st.get("tasters", [])
+    tasters = [_taster_with_vitals(t, st.get("vitals", {})) for t in st.get("tasters", [])]
     mac_to_taster = {t.get("mac"): t for t in tasters}
     # Create a complete mapping for all lanes from 1 to max_lane
     full_mapping = {
@@ -306,7 +323,12 @@ def api_post_vitals():
         "battery": payload.get("battery"),
         "temp": payload.get("temp"),
         "humidity": payload.get("humidity"),
-        "ts": int(payload.get("ts", now_ms())),
+        # Der Server-Zeitstempel zaehlt, die Uhr des Tasters ist beim Start evtl. nicht synchron
+        "ts": now_ms(),
+        "vbat": payload.get("vbat"),
+        "rssi": payload.get("rssi"),
+        "fw": payload.get("fw"),
+        "uptime_s": payload.get("uptime_s"),
     }
     st["vitals"][mac] = new_vital
     save_state(st)
@@ -330,12 +352,19 @@ def api_post_taster():
     if not name:
         return jsonify({"ok": False, "error": "missing name"}), 400
     entry: Taster = {
-        "mac": str(mac),
+        "mac": str(mac).strip(),
         "name": str(name),
         "ts": int(payload.get("ts", now_ms())),
         "stopwatch_ms": payload.get("stopwatch_ms"),
     }
-    st["tasters"].append(entry)
+    # Bekannte MAC: Eintrag aktualisieren statt zu duplizieren
+    for existing in st["tasters"]:
+        if existing.get("mac") == entry["mac"]:
+            existing["name"] = entry["name"]
+            existing["ts"] = entry["ts"]
+            break
+    else:
+        st["tasters"].append(entry)
 
     save_state(st)
     return jsonify({"ok": True, "taster": entry})

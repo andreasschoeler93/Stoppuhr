@@ -121,7 +121,7 @@
                   <app-taster-card
                     [title]="'Taster ' + starterTaster?.name || 'Taster'"
                     [detail]="starterTaster?.mac || 'Nicht belegt'"
-                    [vitals]=undefined
+                    [vitals]="vitalsOf(starterTaster)"
                     [badgeText]="'Starter AKTIV'"
                     badgeVariant="active"
                     (click)="removeTasterFromLane('starter')">
@@ -146,7 +146,7 @@
                     <app-taster-card
                       [title]="'Taster ' + taster?.name || 'Taster'"
                       [detail]="taster?.mac || 'Nicht belegt'"
-                      [vitals]=undefined
+                      [vitals]="vitalsOf(taster)"
                       [badgeText]="'BAHN ' + laneEntry.key + ' AKTIV'"
                       badgeVariant="active"
                       (click)="removeTasterFromLane(laneEntry.key.toString())">
@@ -171,6 +171,7 @@
                 <app-taster-card
                   [title]="'Taster ' + taster?.name || 'Taster'"
                   [detail]="taster.mac"
+                  [vitals]="vitalsOf(taster)"
                   [badgeText]="selectedTasterForAssignment() === taster.mac ? 'AUSGEWÄHLT' : 'BEREIT'"
                   [badgeVariant]="selectedTasterForAssignment() === taster.mac ? 'active' : 'default'"
                   (click)="selectedTasterForAssignment.set(taster.mac)">
