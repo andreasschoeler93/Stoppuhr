@@ -930,10 +930,11 @@ def api_test_reset_run():
 
 def _heats_for_xml(st: State) -> list[tuple[int, int, dict[int, int]]]:
     """
-    Fertige Laeufe als (Wettkampf, Lauf im Wettkampf, {Bahn: ms}) fuer JAuswertung.
+    Fertige Laeufe als (Laufnummer, 1, {Bahn: ms}) fuer JAuswertung.
 
-    Die Laufnummer der Startkarten laeuft ueber alle Wettkaempfe durch; JAuswertung erwartet
-    die Nummer innerhalb des Wettkampfs. Ein Lauf gilt als fertig, wenn alle Bahnen eine Zeit
+    JAuswertung (Standard-Nummerierung) fuehrt die Laufnummer der Startkarten als <event> und
+    den Teillauf (Laufbuchstabe + 1) als <heat>. Nur so waehlt es den Lauf selbst vor.
+    Ein Lauf gilt als fertig, wenn alle Bahnen eine Zeit
     haben oder der Lauf schon vor dem aktuellen liegt (Bahnen ohne Zeit fehlen dann).
     """
     cards_per_run = st.get("startcards_per_run") or {}
@@ -957,7 +958,7 @@ def _heats_for_xml(st: State) -> list[tuple[int, int, dict[int, int]]]:
         expected = {int(c["Bahn"]) for c in cards_per_run.get(str(run), []) if str(c.get("Bahn")).isdigit()}
         if run >= current and not expected <= set(lane_times):
             continue
-        heats.append((event_of[run], heat_of[run], {int(k): v for k, v in lane_times.items()}))
+        heats.append((run, 1, {int(k): v for k, v in lane_times.items()}))
     return sorted(heats)
 
 
