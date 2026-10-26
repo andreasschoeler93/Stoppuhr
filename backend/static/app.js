@@ -300,6 +300,10 @@ function renderButtonList() {
     }
 
     const letter = btn.letter || "?";
+    const assigned = btn.role === "starter" || (btn.role === "bahn" && btn.lane != null);
+    const unassignHtml = assigned
+      ? `<button class="btn btn-sm btn-outline-secondary btn-unassign mt-1" data-lane="${btn.role === "starter" ? "starter" : escapeHtml(String(btn.lane))}">Entfernen</button>`
+      : "";
     div.innerHTML = `
       <div class="taster-header">
         <span>Taster ${escapeHtml(letter)}</span>
@@ -309,6 +313,7 @@ function renderButtonList() {
       <div class="small mt-1 text-muted">
         ${escapeHtml(vitalsText(btn))}
       </div>
+      ${unassignHtml}
     `;
 
     div.addEventListener("dragstart", ev => {
@@ -415,10 +420,7 @@ function renderLanesTable() {
       <td>${escapeHtml(name)}</td>
       <td>${escapeHtml(startnr)}</td>
       <td>${escapeHtml(disz)}</td>
-      <td><div class="d-flex align-items-center gap-2">
-        <div class="drop-target flex-grow-1" data-lane="${b}">${tasterHtml}</div>
-        ${(activeBtn || pendingBtn) ? `<button class="btn btn-sm btn-outline-secondary btn-unassign" data-lane="${b}">Entfernen</button>` : ""}
-      </div></td>
+      <td><div class="drop-target" data-lane="${b}">${tasterHtml}</div></td>
       <td class="lane-time" data-lane="${b}" data-active="${r ? 1 : 0}">–</td>
     `;
     tbody.appendChild(tr);
@@ -504,7 +506,7 @@ async function init() {
   });
 
   byId("btnClearStarter").addEventListener("click", () => unassignLane("starter"));
-  byId("bahnenTableBody").addEventListener("click", ev => {
+  byId("tasterList").addEventListener("click", ev => {
     const b = ev.target.closest(".btn-unassign");
     if (b) unassignLane(b.dataset.lane);
   });
