@@ -518,6 +518,18 @@ async function init() {
   byId("baseUrlInputSettings").addEventListener("input", () => { byId("baseUrlInput").value = byId("baseUrlInputSettings").value; });
   byId("suffixDisplay").value = byId("suffixInput").value;
   byId("baseUrlInput").addEventListener("input", () => { byId("baseUrlInputSettings").value = byId("baseUrlInput").value; });
+
+  // Eintrag fuer JAuswertung: Adresse dieser Seite (IP:Port) zum Kopieren
+  byId("alphaServerValue").value = location.host;
+  byId("alphaServerUrl").textContent = `http://${location.host}/heats.xml`;
+  byId("btnCopyAlpha").addEventListener("click", async () => {
+    const input = byId("alphaServerValue");
+    try { await navigator.clipboard.writeText(input.value); }
+    catch { input.select(); document.execCommand("copy"); }
+    const msg = byId("alphaCopiedMsg");
+    msg.classList.remove("d-none");
+    setTimeout(() => msg.classList.add("d-none"), 2000);
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => { init(); });

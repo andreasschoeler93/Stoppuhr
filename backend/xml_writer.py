@@ -7,20 +7,12 @@ Copyright: © 2026 Robin Dönnebrink
 """
 
 from typing import Iterable, Mapping
-from xml.dom import minidom
 from xml.etree import ElementTree as ET
 
 
 def prettify(elem: ET.Element) -> str:
-    """Return a pretty-printed XML string for an ElementTree element."""
-    # Serialize the ElementTree element (and its subtree) into raw XML bytes.
-    rough_string: bytes = ET.tostring(elem, encoding="utf-8")
-
-    # Re-parse the bytes with minidom so we can use its pretty printer.
-    reparsed = minidom.parseString(rough_string)
-
-    # Produce indented XML (two spaces per level).
-    return reparsed.toprettyxml(indent="  ")
+    """Kompaktes XML ohne Kopfzeile und Einrueckung, genau wie in der Referenzdatei von JAuswertung."""
+    return ET.tostring(elem, encoding="unicode")
 
 
 def create_lane(entry_parent: ET.Element, lane_index: int, time_value: int) -> None:

@@ -150,6 +150,21 @@
     <div class="tab-pane fade" id="settings" role="tabpanel">
       <div class="card mb-3">
         <div class="card-body">
+          <h2 class="h6 mb-3">Eintrag für JAuswertung (AlphaServer)</h2>
+          <label class="form-label">Im Feld „AlphaServer Server“ eintragen</label>
+          <div class="input-group">
+            <input type="text" id="alphaServerValue" class="form-control" readonly>
+            <button class="btn btn-outline-primary" type="button" id="btnCopyAlpha">Kopieren</button>
+          </div>
+          <div class="form-text">
+            Die Zeiten liegen unter <code id="alphaServerUrl"></code>.
+            <span class="text-success d-none" id="alphaCopiedMsg">Kopiert.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
           <h2 class="h6 mb-3">Startkarten-Datei</h2>
           <div class="row g-3 align-items-end">
             <div class="col-md-6">
