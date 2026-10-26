@@ -786,6 +786,7 @@ def api_get_display():
     role: none | starter | lane. state: ready | running | stopped | inactive.
     elapsed_ms: Laufzeit seit dem Start (nur state running), time_ms: gestoppte Zeit.
     last_*: letzter abgeschlossener Lauf (bei Bahn: letzte Zeit dieser Bahn).
+    lanes (nur Starter): Bahnen des Laufs als "bahn,zustand,ms;..." (w/r/s, ms nur bei s).
     """
     st = load_state()
     _maybe_advance_run(st)
@@ -822,6 +823,15 @@ def api_get_display():
         out["role"] = "starter"
         out["name"] = _ascii(f"{len(cards)} Schwimmer") if cards else ""
         out["discipline"] = _ascii(cards[0].get("Disziplin")) if cards else ""
+        # Alle Bahnen des Laufs: "bahn,zustand,ms;..." (w wartet, r laeuft, s gestoppt; ms nur bei s)
+        parts = []
+        for ln in sorted({str(c.get("Bahn")) for c in cards if str(c.get("Bahn")).isdigit()}, key=int):
+            t = _lane_time(presses, ln)
+            if t is not None:
+                parts.append(f"{ln},s,{t}")
+            else:
+                parts.append(f"{ln},{'r' if starter else 'w'},-1")
+        out["lanes"] = ";".join(parts)
         if starter:
             if finished:
                 times = [t for ln in presses if ln != STARTER_KEY
