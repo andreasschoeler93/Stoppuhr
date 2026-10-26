@@ -140,7 +140,11 @@ async function loadButtons() {
     last_seen_ms: t.last_seen_ts || null,
     last_event_type: null,
     battery_percent: t.online ? (t.battery ?? null) : null,
-    rssi_dbm: t.online ? (t.rssi ?? null) : null
+    rssi_dbm: t.online ? (t.rssi ?? null) : null,
+    vbat: t.online ? (t.vbat ?? null) : null,
+    temp: t.online ? (t.temp ?? null) : null,
+    humidity: t.online ? (t.humidity ?? null) : null,
+    online: !!t.online
   }));
 
   resetAssignments();
@@ -159,6 +163,16 @@ async function loadButtons() {
   renderButtonList();
   renderLanesTable();
   byId("tasterLastRefresh").textContent = "Letzte Aktualisierung: " + new Date().toLocaleTimeString();
+}
+
+function vitalsText(btn) {
+  if (!btn || !btn.online) return "offline";
+  const parts = [];
+  if (btn.battery_percent != null) parts.push(btn.battery_percent + "%" + (btn.vbat != null ? " (" + Number(btn.vbat).toFixed(2) + " V)" : ""));
+  if (btn.rssi_dbm != null) parts.push(btn.rssi_dbm + " dBm");
+  if (btn.temp != null) parts.push(Number(btn.temp).toFixed(1) + " °C");
+  if (btn.humidity != null) parts.push(Number(btn.humidity).toFixed(0) + " % rF");
+  return parts.join(" · ");
 }
 
 function renderButtonList() {
@@ -185,8 +199,7 @@ function renderButtonList() {
       </div>
       <div class="taster-mac">${escapeHtml(btn.name ? btn.name + " · " + btn.mac : btn.mac)}</div>
       <div class="small mt-1 text-muted">
-        Akku: ${btn.battery_percent != null ? escapeHtml(btn.battery_percent) + "%" : "–"} |
-        RSSI: ${btn.rssi_dbm != null ? escapeHtml(btn.rssi_dbm) + " dBm" : "–"}
+        ${escapeHtml(vitalsText(btn))}
       </div>
     `;
 
@@ -285,7 +298,8 @@ function renderLanesTable() {
       let main = activeBtn ? (activeBtn.letter || "?") : (pendingBtn.letter || "?");
       let extra = "";
       if (activeBtn && pendingBtn && pendingBtn.id !== activeBtn.id) extra = ` <span class="text-muted">(neu: ${escapeHtml(pendingBtn.letter || "?")})</span>`;
-      tasterHtml = `<div class="taster-assigned"><strong>Taster ${escapeHtml(main)}</strong>${extra}</div>`;
+      const shown = activeBtn || pendingBtn;
+      tasterHtml = `<div class="taster-assigned"><strong>Taster ${escapeHtml(main)}</strong>${extra}<div class="small text-muted">${escapeHtml(vitalsText(shown))}</div></div>`;
     }
 
     tr.innerHTML = `
