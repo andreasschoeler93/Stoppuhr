@@ -32,6 +32,7 @@ DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
+CLOCK_OFFSET_MIN_MS: Final[int] = 250
 HEATS_XML_PATH: Final[str] = "/app/results/heats.xml"
 
 
@@ -710,8 +711,12 @@ def api_post_triggers():
     else:
         mac_norm = str(mac).strip()
         lane = _lane_for_mac(st, mac_norm)
-        # Zeitstempel des Tasters auf die Serveruhr umrechnen
-        ts_val += int((st.get("clock_offsets") or {}).get(mac_norm, 0))
+        # Zeitstempel des Tasters auf die Serveruhr umrechnen. Kleine Versaetze sind nur
+        # Netzwerklatenz (je Taster verschieden) und wuerden die Zeiten verfaelschen; korrigiert
+        # wird nur bei grober Abweichung (Taster nicht auf Serverzeit synchronisiert).
+        offset = int((st.get("clock_offsets") or {}).get(mac_norm, 0))
+        if abs(offset) > CLOCK_OFFSET_MIN_MS:
+            ts_val += offset
 
     if lane is None:
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
