@@ -37,6 +37,7 @@ HEATS_XML_PATH: Final[str] = os.environ.get("HEATS_XML_PATH", "/app/results/heat
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.json.ensure_ascii = False
 redis_store = redis.Redis(
     host=os.environ.get("REDIS_HOST", "redis"),
     port=int(os.environ.get("REDIS_PORT", "6379")),
@@ -780,13 +781,9 @@ def api_post_triggers():
     )
 
 
-_UMLAUTE = {"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"}
-
-
-def _ascii(text: Any, limit: int = 30) -> str:
-    """Text fuer das Taster-Display: nur ASCII (die Display-Schrift kennt keine Umlaute)."""
-    s = "".join(_UMLAUTE.get(ch, ch) for ch in str(text or ""))
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+def _display_text(text: Any, limit: int = 30) -> str:
+    """Bereinigt Anzeigetext und erhält Umlaute als UTF-8."""
+    s = unicodedata.normalize("NFC", str(text or ""))
     return s.replace('"', "").replace("\\", "").strip()[:limit]
 
 
@@ -842,8 +839,8 @@ def api_get_display():
 
     if lane == STARTER_KEY:
         out["role"] = "starter"
-        out["name"] = _ascii(f"{len(cards)} Schwimmer") if cards else ""
-        out["discipline"] = _ascii(cards[0].get("Disziplin")) if cards else ""
+        out["name"] = _display_text(f"{len(cards)} Schwimmer") if cards else ""
+        out["discipline"] = _display_text(cards[0].get("Disziplin")) if cards else ""
         # Alle Bahnen des Laufs: "bahn,zustand,ms;..." (w wartet, r laeuft, s gestoppt; ms nur bei s)
         parts = []
         for ln in sorted({str(c.get("Bahn")) for c in cards if str(c.get("Bahn")).isdigit()}, key=int):
@@ -877,8 +874,8 @@ def api_get_display():
         out["state"] = "inactive"
         out["name"] = "frei"
     else:
-        out["name"] = _ascii(card.get("Name"))
-        out["discipline"] = _ascii(card.get("Disziplin"))
+        out["name"] = _display_text(card.get("Name"))
+        out["discipline"] = _display_text(card.get("Disziplin"))
         stopped = _lane_time(presses, str(lane))
         if stopped is not None:
             out["state"], out["time_ms"] = "stopped", stopped
@@ -892,7 +889,7 @@ def api_get_display():
                 (c for c in (st.get("startcards_per_run") or {}).get(str(r), [])
                  if str(c.get("Bahn")) == str(lane)), None)
             out["last_ms"], out["last_run"] = t, r
-            out["last_name"] = _ascii((prev_card or {}).get("Name"))
+            out["last_name"] = _display_text((prev_card or {}).get("Name"))
             break
     return jsonify(out)
 

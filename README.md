@@ -49,6 +49,11 @@ bash deploy/install.sh
 - Zeitserver für die Taster: in `/etc/chrony/chrony.conf` `allow <Taster-Netz>` ergänzen
   (ohne Internet zusätzlich `local stratum 10`), danach `sudo systemctl restart chrony`.
 
+### Taster-Anzeige
+
+`GET /api/display` liefert Namen und Disziplinen unverändert mit deutschen Umlauten als UTF-8.
+Die Firmware kann dadurch `ä`, `ö`, `ü`, `Ä`, `Ö` und `Ü` korrekt darstellen.
+
 ---
 
 ## Versionierung
