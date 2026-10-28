@@ -9,6 +9,7 @@ HIER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VIP="${VIP:-192.168.50.10}"
 KOFFER_IP="${KOFFER_IP:-192.168.50.11}"
 BAD_IP="${BAD_IP:-192.168.50.12}"
+NAME="${NAME:-stoppuhr}"
 
 case "$ROLLE" in
   koffer) OWN_IP="$KOFFER_IP"; PEER_IP="$BAD_IP";    PRIO=150 ;;
@@ -52,7 +53,25 @@ if [ "$ROLLE" = "bad" ]; then
 fi
 sudo systemctl restart chrony
 
+echo "== Namen und DHCP: http://$NAME:1999 fuehrt immer zum arbeitenden Pi =="
+sudo apt-get install -y dnsmasq
+if [ "$ROLLE" = "koffer" ]; then DHCP_VON=100; DHCP_BIS=149; else DHCP_VON=150; DHCP_BIS=199; fi
+sudo tee /etc/dnsmasq.d/stoppuhr.conf >/dev/null <<EOF
+interface=br0
+bind-interfaces
+dhcp-authoritative
+dhcp-range=192.168.50.$DHCP_VON,192.168.50.$DHCP_BIS,12h
+# Geraete nutzen die gemeinsame Adresse als DNS-Server; dort antwortet immer der arbeitende Pi
+dhcp-option=option:dns-server,$VIP
+# Hostname des Pi nicht ausliefern, nur den gemeinsamen Namen
+no-hosts
+address=/$NAME/$VIP
+EOF
+sudo systemctl enable dnsmasq
+sudo systemctl restart dnsmasq
+
 echo "== Dienste: keepalived entscheidet, wer die Stoppuhr startet =="
 sudo systemctl disable --now stoppuhr
 sudo systemctl enable --now keepalived
 echo "Fertig. Pruefen: ip -4 addr show br0  (die Adresse $VIP liegt nur auf dem Pi, der arbeitet)"
+echo "Oberflaeche: http://$NAME:1999 (oder http://$VIP:1999)"

@@ -40,8 +40,11 @@ sudo nmcli con add type wifi ifname wlan0 con-name ap ssid KOFFER-SSID mode ap w
 sudo nmcli con up br0
 ```
 
-3. DHCP: auf beiden Pis `dnsmasq` mit getrennten Bereichen, damit auch bei Ausfall eines Pi Adressen vergeben werden:
-   Koffer `dhcp-range=192.168.50.100,192.168.50.149,12h`, Bad `dhcp-range=192.168.50.150,192.168.50.199,12h`, jeweils `interface=br0`.
+3. DHCP und Name: übernimmt `install-zwei-pi.sh` (nächster Schritt) per `dnsmasq`. Koffer vergibt `.100`–`.149`, Bad `.150`–`.199`,
+   damit auch bei Ausfall eines Pi Adressen vergeben werden. Beide antworten auf den Namen **`stoppuhr`** mit der gemeinsamen Adresse
+   (anderer Name: `NAME=...`). Im Browser genügt dann `http://stoppuhr:1999`, es kommt immer die Oberfläche des arbeitenden Pi.
+   Das gilt für Geräte in einem der beiden WLANs (sie nutzen den Pi als DNS-Server). Sonst `http://192.168.50.10:1999`.
+   Hostnamen der Pis bitte unterschiedlich lassen (z. B. `koffer-pi`, `bad-pi`), der Name `stoppuhr` gehört der gemeinsamen Adresse.
 4. Zwei-Pi-Dienste: `bash deploy/zwei-pi/install-zwei-pi.sh koffer` bzw. `... bad`. Abweichende Adressen über `VIP=`, `KOFFER_IP=`, `BAD_IP=`.
    Der normale Dienst `stoppuhr` wird dabei abgeschaltet; keepalived startet ihn nur auf dem arbeitenden Pi.
 
