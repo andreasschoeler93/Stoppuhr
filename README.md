@@ -1,16 +1,22 @@
-# Stoppuhr – v0.4.3 (Stable Beta)
+# Stoppuhr – v0.5.1 (Stable Beta)
 
 Webbasierte Wettkampf-Stoppuhr mit ESP-Tastern und Raspberry-Pi-Backend.
 
 ---
 
-## Aktueller Stand (v0.4.3)
+## Aktueller Stand (v0.5.1)
 
-✅ Startkarten-Import (manuell geladen)  
-✅ Dynamische Bahnanzahl (max aus CSV, Rest inaktiv)  
-✅ Drag & Drop Taster-Zuordnung (immer möglich)  
-✅ Start / Stopp / Auto-Next-Run  
-✅ GitHub-fähig & reproduzierbar  
+✅ Startkarten-Import (manuell geladen)
+
+✅ Dynamische Bahnanzahl (max aus CSV, Rest inaktiv)
+
+✅ Drag & Drop Taster-Zuordnung (immer möglich)
+
+✅ Start / Stopp / Auto-Next-Run
+
+✅ Wiederholungsläufe ohne Überschreiben vorheriger Zeiten
+
+✅ GitHub-fähig & reproduzierbar
 
 ---
 
@@ -60,11 +66,20 @@ Der Server sendet den Abschaltbefehl während der eingestellten Dauer (Standard:
 regelmäßigen Display-Abfragen mit. Taster, die in dieser Zeit nicht mit dem Pi verbunden sind, können ihn
 nicht empfangen. Die Buchstaben werden bei der nächsten Anmeldung wieder ab A vergeben.
 
+### Abbruch und Wiederholung eines Laufs
+
+Ein langer Druck (2 Sekunden) auf den Starter-Taster bricht den laufenden Versuch ab und bereitet
+die nächste Version desselben Laufs vor. Die Stopp-Sperre beginnt mit dem Abbruch; vor ihrem Ablauf
+wird ein kurzer Startdruck abgewiesen. Über **Versuch vorbereiten** lässt sich im Webinterface
+ebenfalls eine neue Version eines ausgewählten Laufs anlegen. Bereits gespeicherte Zeiten bleiben
+erhalten; Versionen werden separat nummeriert (z. B. `5/2`) und im XML-Export als eigener Heat
+ausgegeben.
+
 ---
 
 ## Versionierung
 
-- Produktive Basis: **v0.4.3**
+- Produktive Basis: **v0.5.1**
 - Entwicklung ab jetzt **nur über GitHub**
 - Neue Features → neue Minor-Version
 

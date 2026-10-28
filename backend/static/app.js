@@ -197,20 +197,24 @@ function renderStarter() {
 }
 
 // Messergebnisse des Servers (Zeiten je Lauf und Bahn)
-let runStatus = { current_run: null, runs: {} };
+let runStatus = { current_run: null, current_attempt: 1, current_key: null, runs: {} };
 let serverOffsetMs = 0; // Serverzeit minus Browserzeit
-let lastServerRun = null;
+let lastServerKey = null;
 
 async function loadRunStatus() {
   const t0 = Date.now();
   runStatus = await apiGet("/api/run-status");
   if (runStatus.server_now) serverOffsetMs = runStatus.server_now - (t0 + Date.now()) / 2;
-  let label = "Server-Lauf: " + (runStatus.current_run ?? "–");
+  let label = "Server-Lauf: " + (runStatus.current_label ?? "–");
+  if (runStatus.start_lockout_remaining_s > 0) {
+    label += ` · Start gesperrt: ${Math.ceil(runStatus.start_lockout_remaining_s)} s`;
+  }
   if (runStatus.next_run_in_s != null) label += ` · nächster Lauf in ${Math.ceil(runStatus.next_run_in_s)} s`;
   byId("serverRunLabel").textContent = label;
   // Anzeige folgt dem Lauf des Servers, wenn dieser wechselt
   const serverRun = String(runStatus.current_run ?? "");
-  if (lastServerRun !== null && serverRun !== lastServerRun && serverRun) {
+  const serverKey = String(runStatus.current_key ?? "");
+  if (lastServerKey !== null && serverKey !== lastServerKey && serverRun) {
     const sel = byId("laufSelect");
     if ([...sel.options].some(o => o.value === serverRun)) {
       sel.value = serverRun;
@@ -218,7 +222,7 @@ async function loadRunStatus() {
       renderLanesTable();
     }
   }
-  lastServerRun = serverRun;
+  lastServerKey = serverKey;
   updateClocks();
 }
 
@@ -232,7 +236,10 @@ function formatMs(ms) {
 
 // Zeitspalte: gestoppte Zeit fest anzeigen, sonst laeuft die Uhr seit dem Start mit
 function updateClocks() {
-  const run = runStatus.runs[String(currentRun)] || {};
+  const runKey = String(currentRun) === String(runStatus.current_run)
+    ? runStatus.current_key
+    : latestAttemptKeyForRun(currentRun);
+  const run = runStatus.runs[runKey] || {};
   const now = Date.now() + serverOffsetMs;
   document.querySelectorAll(".lane-time").forEach(td => {
     const lane = td.dataset.lane;
@@ -249,6 +256,24 @@ function updateClocks() {
     if (td.textContent !== text) td.textContent = text;
     td.className = cls;
   });
+}
+
+function latestAttemptKeyForRun(run) {
+  const runStr = String(run);
+  const latestAttempt = attemptNumberForRun(run);
+  return latestAttempt > 1 ? `${runStr}/${latestAttempt}` : runStr;
+}
+
+function attemptNumberForRun(run) {
+  const runStr = String(run);
+  let latestAttempt = 0;
+  Object.keys(runStatus.runs || {}).forEach(key => {
+    const [baseRun, attemptText] = key.split("/");
+    if (baseRun !== runStr) return;
+    const attempt = attemptText ? Number(attemptText) : 1;
+    if (attempt > latestAttempt) latestAttempt = attempt;
+  });
+  return latestAttempt;
 }
 
 // TESTBEREICH: Tastendruck ohne echten Taster ausloesen (spaeter entfernen)
@@ -427,8 +452,11 @@ function renderLanesTable() {
     tbody.appendChild(tr);
   }
 
+  const selectedRunKey = String(currentRun) === String(runStatus.current_run)
+    ? runStatus.current_key
+    : latestAttemptKeyForRun(currentRun);
   byId("bahnenFooter").textContent = currentRun
-    ? `Lauf ${currentRun}: ${runRows.length} Startkarten-Zeilen (nicht belegte Bahnen sind inaktiv).`
+    ? `Lauf ${selectedRunKey || currentRun}: ${runRows.length} Startkarten-Zeilen (nicht belegte Bahnen sind inaktiv).`
     : "Keine Laufdaten geladen.";
 
   attachDropTargets();
@@ -475,12 +503,17 @@ async function init() {
   byId("btnSetRun").addEventListener("click", async () => {
     const run = byId("laufSelect").value;
     if (!run) return;
-    if (!confirm(`Lauf ${run} als aktuellen Lauf übernehmen?\nGemessene Zeiten ab Lauf ${run} werden verworfen.`)) return;
+    const nextAttempt = attemptNumberForRun(run) + 1;
+    const attemptLabel = nextAttempt === 1 ? String(run) : `${run}/${nextAttempt}`;
+    if (!confirm(`Lauf ${run} als neue Version ${attemptLabel} vorbereiten?\nBisherige Zeiten bleiben erhalten. Der Start ist erst nach Ablauf der Stopp-Sperre möglich.`)) return;
     try {
       await apiPost("/api/current-run", { run: Number(run) });
+      currentRun = run;
       await loadRunStatus();
+      renderLanesTable();
+      alert(`Lauf ${runStatus.current_key} vorbereitet. Start in ${Math.ceil(runStatus.start_lockout_remaining_s || 0)} Sekunden möglich.`);
     } catch (e) {
-      alert("Übernehmen fehlgeschlagen: " + e.message);
+      alert("Vorbereiten fehlgeschlagen: " + e.message);
     }
   });
 

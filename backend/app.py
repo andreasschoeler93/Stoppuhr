@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.4.3
+# Version: v0.5.1
 # Status: stable-beta
 # ----------------------------------------
 
@@ -27,7 +27,7 @@ from flask.typing import ResponseReturnValue
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.4.3"
+APP_VERSION: Final[str] = "0.5.1"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -96,10 +96,14 @@ class Startcard:
 class State(TypedDict):
     settings: dict[str, str]
     shutdown_until_ms: int
+    start_locked_until_ms: int
     startcards: dict[str, Any]
     tasters: list[Taster]
     vitals: dict[str, Vital]
     current_run: int
+    current_attempt: int
+    aborted_attempts: list[str]
+    abort_requests: dict[str, Any]
     results: dict[int, Any]
     assignments: dict[str, Any]
     # Due to serialization, store run number always as string
@@ -117,6 +121,7 @@ def _default_state() -> State:
             "shutdown_grace_s": "10",
         },
         "shutdown_until_ms": 0,
+        "start_locked_until_ms": 0,
         "startcards": {
             "loaded": False,
             "last_fetch_ts": None,
@@ -134,6 +139,9 @@ def _default_state() -> State:
         "startcards_per_run": defaultdict(list),
         "triggers_per_run": {},
         "current_run": 1,
+        "current_attempt": 1,
+        "aborted_attempts": [],
+        "abort_requests": {},
     }
 
 
@@ -174,6 +182,7 @@ def _stop_lockout_ms(st: State) -> int:
 
 def _advance_run(st: State) -> None:
     st["current_run"] = int(st.get("current_run") or 0) + 1
+    st["current_attempt"] = 1
     st["run_finished_ts"] = None
     save_state(st)
 
@@ -183,6 +192,56 @@ def _maybe_advance_run(st: State) -> None:
     finished = st.get("run_finished_ts")
     if finished is not None and now_ms() - int(finished) >= _auto_next_delay_ms(st):
         _advance_run(st)
+
+
+def _parse_attempt_key(key: str) -> Optional[tuple[int, int]]:
+    try:
+        run_s, separator, attempt_s = str(key).partition("/")
+        run = int(run_s)
+        attempt = int(attempt_s) if separator else 1
+    except ValueError:
+        return None
+    if run < 1 or attempt < 1:
+        return None
+    return run, attempt
+
+
+def _attempt_key(run: int, attempt: int) -> str:
+    return str(run) if attempt == 1 else f"{run}/{attempt}"
+
+
+def _next_attempt(st: State, run: int) -> int:
+    attempts = (
+        attempt
+        for key in (st.get("triggers_per_run") or {})
+        if (parsed := _parse_attempt_key(key)) is not None
+        for existing_run, attempt in [parsed]
+        if existing_run == run
+    )
+    return max(attempts, default=0) + 1
+
+
+def _prepare_attempt(st: State, run: int) -> int:
+    old_run = int(st.get("current_run") or 0)
+    old_attempt = int(st.get("current_attempt") or 1)
+    old_key = _attempt_key(old_run, old_attempt) if old_run else ""
+    old_presses = (st.get("triggers_per_run") or {}).get(old_key) or {}
+    if st.get("run_finished_ts") is None and old_presses.get(STARTER_KEY):
+        aborted = set(st.get("aborted_attempts") or [])
+        aborted.add(old_key)
+        st["aborted_attempts"] = sorted(aborted)
+
+    current_key = _attempt_key(run, old_attempt)
+    existing_attempt = (st.get("triggers_per_run") or {}).get(current_key)
+    if old_run == run and not existing_attempt:
+        attempt = old_attempt
+    else:
+        attempt = _next_attempt(st, run)
+    st["current_run"] = run
+    st["current_attempt"] = attempt
+    st["run_finished_ts"] = None
+    st["start_locked_until_ms"] = now_ms() + _stop_lockout_ms(st)
+    return attempt
 
 
 @app.get("/")
@@ -264,6 +323,10 @@ def api_end_competition() -> ResponseReturnValue:
     st["triggers_per_run"] = {}
     st["clock_offsets"] = {}
     st["current_run"] = 1
+    st["current_attempt"] = 1
+    st["start_locked_until_ms"] = 0
+    st["aborted_attempts"] = []
+    st["abort_requests"] = {}
     st["run_finished_ts"] = None
     save_state(st)
     _write_heats_xml(st)
@@ -790,6 +853,8 @@ def api_post_triggers():
     if current_run is None or str(current_run).strip() == "":
         return jsonify({"ok": False, "error": "no current_run selected"}), 400
 
+    current_attempt = int(st.get("current_attempt") or 1)
+    current_key = _attempt_key(int(current_run), current_attempt)
     ts_val = int(payload.get("ts", now_ms()))
 
     if test_lane is not None:
@@ -809,29 +874,43 @@ def api_post_triggers():
     if lane is None:
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
+    if lane == STARTER_KEY:
+        locked_until = int(st.get("start_locked_until_ms", 0) or 0)
+        if now_ms() < locked_until:
+            remaining_ms = locked_until - now_ms()
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "Start nach Abbruch noch gesperrt.",
+                    "lockout_remaining_s": (remaining_ms + 999) // 1000,
+                }
+            ), 423
+
     # Starter-Druck nach abgeschlossenem Lauf startet sofort den naechsten Lauf
     if lane == STARTER_KEY and st.get("run_finished_ts") is not None:
         _advance_run(st)
         current_run = st["current_run"]
+        current_attempt = int(st.get("current_attempt") or 1)
+        current_key = _attempt_key(int(current_run), current_attempt)
 
     lanes_in_run = [v["Bahn"] for v in st.get("startcards_per_run", {}).get(str(current_run), [])]
-    triggers_per_run = st.get("triggers_per_run", dict)
-    triggers_per_run.setdefault(str(current_run), {})
-    triggers_per_run[str(current_run)].setdefault(lane, None)
+    triggers_per_run = st.get("triggers_per_run") or {}
+    triggers_per_run.setdefault(current_key, {})
+    triggers_per_run[current_key].setdefault(lane, None)
     # Abort press if the run has not been started yet.
     if lane != STARTER_KEY and not any(
-        p == STARTER_KEY for p in triggers_per_run[str(current_run)].keys()
+        p == STARTER_KEY for p in triggers_per_run[current_key].keys()
     ):
         return jsonify({"ok": False, "error": "Run has not started yet."}), 400
     # Stopp-Sperre: Bahn-Signale kurz nach dem Start werden ignoriert (z. B. Fehlausloesungen)
     if lane != STARTER_KEY:
-        starter_press = triggers_per_run[str(current_run)].get(STARTER_KEY)
+        starter_press = triggers_per_run[current_key].get(STARTER_KEY)
         lockout_ms = _stop_lockout_ms(st)
         if starter_press and ts_val - int(starter_press["ts"]) < lockout_ms:
             logger.info(f"Stop signal of lane {lane} ignored (lockout {lockout_ms} ms)")
             return jsonify({"ok": True, "ignored": True, "reason": "stop_lockout"})
     # Abort double press
-    if triggers_per_run[str(current_run)][lane]:
+    if triggers_per_run[current_key][lane]:
         return jsonify({"ok": False, "error": "Double press detected."}), 400
     # Reject lanes which are not in the current run, except STARTER
     if lane != STARTER_KEY and lane not in lanes_in_run:
@@ -841,12 +920,12 @@ def api_post_triggers():
         "mac": mac_norm,
     }
 
-    triggers_per_run[str(current_run)][lane] = press
+    triggers_per_run[current_key][lane] = press
     st["triggers_per_run"] = triggers_per_run
     save_state(st)
     # Check, if for all lanes presses have been received
-    if lanes_in_run and not (set(lanes_in_run) - set(triggers_per_run[str(current_run)].keys())):
-        logger.info(f"All lanes have been pressed in run {current_run}")
+    if lanes_in_run and not (set(lanes_in_run) - set(triggers_per_run[current_key].keys())):
+        logger.info(f"All lanes have been pressed in run {current_key}")
         _write_heats_xml(st)
         # Nach der eingestellten Wartezeit in den naechsten Lauf wechseln
         st["run_finished_ts"] = now_ms()
@@ -857,6 +936,8 @@ def api_post_triggers():
             "press": {
                 **press,
                 "run": current_run,
+                "attempt": current_attempt,
+                "run_key": current_key,
                 "lane": lane,
             },
         }
@@ -893,9 +974,11 @@ def api_get_display():
     mac = request.args.get("mac", "").strip()
     lane = _lane_for_mac(st, mac) if mac else None
     run = int(st.get("current_run") or 0)
+    attempt = int(st.get("current_attempt") or 1)
+    run_key = _attempt_key(run, attempt)
     cards = (st.get("startcards_per_run") or {}).get(str(run), [])
     all_presses = st.get("triggers_per_run") or {}
-    presses = all_presses.get(str(run)) or {}
+    presses = all_presses.get(run_key) or {}
     starter = presses.get(STARTER_KEY)
     now = now_ms()
     finished = st.get("run_finished_ts") is not None
@@ -905,6 +988,7 @@ def api_get_display():
         "shutdown": now < int(st.get("shutdown_until_ms", 0) or 0),
         "lane": None,
         "run": run,
+        "attempt": attempt,
         "state": "ready",
         "server_now": now,
         "elapsed_ms": None,
@@ -914,11 +998,24 @@ def api_get_display():
         "last_ms": None,
         "last_name": "",
         "last_run": None,
+        "last_attempt": None,
+        "start_locked_until_ms": int(st.get("start_locked_until_ms", 0) or 0),
     }
     if lane is None:
         return jsonify(out)
 
-    previous_runs = sorted((int(r) for r in all_presses if int(r) < run), reverse=True)
+    previous_attempts = []
+    for key, previous_presses in all_presses.items():
+        parsed = _parse_attempt_key(key)
+        if parsed is None or not previous_presses or key == run_key:
+            continue
+        previous_run, previous_attempt = parsed
+        previous_starter = previous_presses.get(STARTER_KEY)
+        if previous_run <= run and previous_starter:
+            previous_attempts.append(
+                (int(previous_starter.get("ts", 0)), previous_run, previous_attempt, previous_presses)
+            )
+    previous_attempts.sort(reverse=True, key=lambda value: value[0])
 
     if lane == STARTER_KEY:
         out["role"] = "starter"
@@ -942,11 +1039,11 @@ def api_get_display():
             else:
                 out["state"] = "running"
                 out["elapsed_ms"] = max(0, now - int(starter["ts"]))
-        for r in previous_runs:
-            times = [t for ln in all_presses[str(r)] if ln != STARTER_KEY
-                     if (t := _lane_time(all_presses[str(r)], ln)) is not None]
+        for _, previous_run, previous_attempt, previous_presses in previous_attempts:
+            times = [t for ln in previous_presses if ln != STARTER_KEY
+                     if (t := _lane_time(previous_presses, ln)) is not None]
             if times:
-                out["last_ms"], out["last_run"] = max(times), r
+                out["last_ms"], out["last_run"], out["last_attempt"] = max(times), previous_run, previous_attempt
                 break
         return jsonify(out)
 
@@ -965,13 +1062,13 @@ def api_get_display():
         elif starter:
             out["state"] = "running"
             out["elapsed_ms"] = max(0, now - int(starter["ts"]))
-    for r in previous_runs:
-        t = _lane_time(all_presses[str(r)], str(lane))
+    for _, previous_run, previous_attempt, previous_presses in previous_attempts:
+        t = _lane_time(previous_presses, str(lane))
         if t is not None:
             prev_card = next(
-                (c for c in (st.get("startcards_per_run") or {}).get(str(r), [])
+                (c for c in (st.get("startcards_per_run") or {}).get(str(previous_run), [])
                  if str(c.get("Bahn")) == str(lane)), None)
-            out["last_ms"], out["last_run"] = t, r
+            out["last_ms"], out["last_run"], out["last_attempt"] = t, previous_run, previous_attempt
             out["last_name"] = _display_text((prev_card or {}).get("Name"))
             break
     return jsonify(out)
@@ -983,7 +1080,7 @@ def api_get_run_status():
     st = load_state()
     _maybe_advance_run(st)
     runs: dict[str, Any] = {}
-    for run, presses in (st.get("triggers_per_run") or {}).items():
+    for run_key, presses in (st.get("triggers_per_run") or {}).items():
         starter = (presses or {}).get(STARTER_KEY)
         starter_ts = starter.get("ts") if starter else None
         times: dict[str, int] = {}
@@ -992,14 +1089,24 @@ def api_get_run_status():
                 if lane == STARTER_KEY or not press:
                     continue
                 times[str(lane)] = press["ts"] - starter_ts
-        runs[str(run)] = {"started": starter_ts is not None, "starter_ts": starter_ts, "times_ms": times}
+        runs[str(run_key)] = {"started": starter_ts is not None, "starter_ts": starter_ts, "times_ms": times}
     finished = st.get("run_finished_ts")
     next_in = None
     if finished is not None:
         next_in = max(0, _auto_next_delay_ms(st) - (now_ms() - int(finished))) / 1000
+    lockout_remaining = max(
+        0, int(st.get("start_locked_until_ms", 0) or 0) - now_ms()
+    ) / 1000
+    current_run = int(st.get("current_run") or 0)
+    current_attempt = int(st.get("current_attempt") or 1)
+    current_key = _attempt_key(current_run, current_attempt)
     return jsonify(
         {
-            "current_run": st.get("current_run"),
+            "current_run": current_run,
+            "current_attempt": current_attempt,
+            "current_key": current_key,
+            "current_label": current_key,
+            "start_lockout_remaining_s": lockout_remaining,
             "server_now": now_ms(),
             "next_run_in_s": next_in,
             "runs": runs,
@@ -1009,7 +1116,7 @@ def api_get_run_status():
 
 @app.post("/api/current-run")
 def api_post_current_run():
-    """Setzt den aktuellen Lauf; Messungen ab diesem Lauf werden verworfen (werden neu gemessen)."""
+    """Bereitet einen neuen Versuch vor, ohne bereits gemessene Zeiten zu verändern."""
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
     try:
@@ -1018,59 +1125,120 @@ def api_post_current_run():
         return jsonify({"ok": False, "error": "invalid run"}), 400
     if run < 1:
         return jsonify({"ok": False, "error": "invalid run"}), 400
-    triggers = st.get("triggers_per_run") or {}
-    for key in [k for k in triggers if str(k).isdigit() and int(k) >= run]:
-        del triggers[key]
-    st["triggers_per_run"] = triggers
-    st["current_run"] = run
-    st["run_finished_ts"] = None
+    attempt = _prepare_attempt(st, run)
     save_state(st)
-    return jsonify({"ok": True, "current_run": run})
+    _write_heats_xml(st)
+    return jsonify(
+        {
+            "ok": True,
+            "current_run": run,
+            "current_attempt": attempt,
+            "current_key": _attempt_key(run, attempt),
+            "start_locked_until_ms": st["start_locked_until_ms"],
+        }
+    )
+
+
+@app.post("/api/abort-run")
+def api_post_abort_run():
+    """Bricht den laufenden Versuch ab und bereitet eine neue Version desselben Laufs vor."""
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    mac = str(payload.get("mac") or "").strip()
+    request_id = str(payload.get("request_id") or "").strip()
+    if not mac or not request_id:
+        return jsonify({"ok": False, "error": "missing mac or request_id"}), 400
+    if _lane_for_mac(st, mac) != STARTER_KEY:
+        return jsonify({"ok": False, "error": "abort is only available on the starter"}), 403
+
+    requests = st.setdefault("abort_requests", {})
+    previous = requests.get(mac)
+    if previous and previous.get("request_id") == request_id:
+        return jsonify(
+            {
+                "ok": True,
+                "current_run": previous["run"],
+                "current_attempt": previous["attempt"],
+                "current_key": previous["key"],
+            }
+        )
+
+    run = int(st.get("current_run") or 0)
+    attempt = int(st.get("current_attempt") or 1)
+    current_key = _attempt_key(run, attempt)
+    current_presses = (st.get("triggers_per_run") or {}).get(current_key) or {}
+    if not current_presses.get(STARTER_KEY) or st.get("run_finished_ts") is not None:
+        return jsonify({"ok": False, "error": "no running attempt to abort"}), 409
+
+    attempt = _prepare_attempt(st, run)
+    key = _attempt_key(run, attempt)
+    requests[mac] = {
+        "request_id": request_id,
+        "run": run,
+        "attempt": attempt,
+        "key": key,
+    }
+    st["abort_requests"] = requests
+    save_state(st)
+    _write_heats_xml(st)
+    return jsonify(
+        {
+            "ok": True,
+            "current_run": run,
+            "current_attempt": attempt,
+            "current_key": key,
+            "start_locked_until_ms": st["start_locked_until_ms"],
+        }
+    )
 
 
 @app.post("/api/test/reset-run")
 def api_test_reset_run():
     """Nur zum Testen: Messung des aktuellen Laufs verwerfen."""
     st = load_state()
-    run = str(st.get("current_run"))
-    (st.get("triggers_per_run") or {}).pop(run, None)
+    run = int(st.get("current_run") or 0)
+    attempt = int(st.get("current_attempt") or 1)
+    run_key = _attempt_key(run, attempt)
+    (st.get("triggers_per_run") or {}).pop(run_key, None)
     st["run_finished_ts"] = None
     save_state(st)
-    return jsonify({"ok": True, "run": run})
+    return jsonify({"ok": True, "run": run_key})
 
 
 def _heats_for_xml(st: State) -> list[tuple[int, int, dict[int, int]]]:
     """
-    Fertige Laeufe als (Laufnummer, 1, {Bahn: ms}) fuer JAuswertung.
+    Versuche als (Laufnummer, Versuch, {Bahn: ms}) fuer JAuswertung.
 
-    JAuswertung (Standard-Nummerierung) fuehrt die Laufnummer der Startkarten als <event> und
-    den Teillauf (Laufbuchstabe + 1) als <heat>. Nur so waehlt es den Lauf selbst vor.
+    JAuswertung fuehrt die Laufnummer der Startkarten als <event>; Wiederholungsversuche
+    werden als <heat> nummeriert (z. B. Lauf 5, Versuch 2 = 5/2).
     Ein Lauf gilt als fertig, wenn alle Bahnen eine Zeit
     haben oder der Lauf schon vor dem aktuellen liegt (Bahnen ohne Zeit fehlen dann).
     """
     cards_per_run = st.get("startcards_per_run") or {}
-    current = int(st.get("current_run") or 0)
     event_of: dict[int, int] = {}
     for run, cards in cards_per_run.items():
         try:
             event_of[int(run)] = int(float((cards[0].get("Wettkampf") or 1)))
         except (ValueError, TypeError, IndexError):
             event_of[int(run)] = 1
-    heat_of: dict[int, int] = {}
-    for event in set(event_of.values()):
-        for pos, run in enumerate(sorted(r for r, e in event_of.items() if e == event), start=1):
-            heat_of[run] = pos
-
+    current = int(st.get("current_run") or 0)
+    current_attempt = int(st.get("current_attempt") or 1)
+    current_key = _attempt_key(current, current_attempt)
     heats = []
-    for run_s, lane_times in sorted(determine_lane_times_per_run().items()):
-        run = int(run_s)
+    for run_key, lane_times in determine_lane_times_per_run(st).items():
+        parsed = _parse_attempt_key(run_key)
+        if parsed is None:
+            continue
+        if run_key in (st.get("aborted_attempts") or []):
+            continue
+        run, attempt = parsed
         if run not in event_of or not lane_times:
             continue
         expected = {int(c["Bahn"]) for c in cards_per_run.get(str(run), []) if str(c.get("Bahn")).isdigit()}
-        if run >= current and not expected <= set(lane_times):
+        if (run > current or run_key == current_key) and not expected <= set(lane_times):
             continue
-        heats.append((run, 1, {int(k): v for k, v in lane_times.items()}))
-    return sorted(heats)
+        heats.append((run, attempt, lane_times))
+    return sorted(heats, key=lambda heat: (heat[0], heat[1]))
 
 
 def _write_heats_xml(st: State) -> str:
@@ -1102,10 +1270,10 @@ def tasters_page() -> str:
     return render_template("tasters.html", version=APP_VERSION)
 
 
-LaneTimesPerRun = dict[str, dict[str, int]]  # run -> lane -> time_ms
+LaneTimesPerRun = dict[str, dict[int, int]]  # run/attempt -> lane -> time_ms
 
 
-def determine_lane_times_per_run() -> LaneTimesPerRun:
+def determine_lane_times_per_run(state: Optional[State] = None) -> LaneTimesPerRun:
     """
     Determine time per lane for each run.
 
@@ -1118,8 +1286,8 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
         lane_times: A dictionary which stores the time for a run and a delta
     """
     lane_times: LaneTimesPerRun = {}
-    state = load_state()
-    for run, presses_by_run in state["triggers_per_run"].items():
+    state = state or load_state()
+    for run, presses_by_run in (state.get("triggers_per_run") or {}).items():
         if not presses_by_run:
             logger.warning(f"No presses recorded for {run=}")
             continue
@@ -1133,7 +1301,7 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
             logger.warning(f"Starter press ts is not an int for {run=}")
             continue
 
-        run_times: dict[str, int] = {}
+        run_times: dict[int, int] = {}
         # Sort lanes
         presses_by_run = sort_lane_times_by_lane(presses_by_run)
         for lane, lane_presses in presses_by_run.items():
@@ -1158,7 +1326,7 @@ def determine_lane_times_per_run() -> LaneTimesPerRun:
 
             run_times[int(lane)] = delta
 
-        lane_times[int(run)] = run_times
+        lane_times[run] = run_times
     return lane_times
 
 
