@@ -54,6 +54,12 @@ bash deploy/install.sh
 `GET /api/display` liefert Namen und Disziplinen unverändert mit deutschen Umlauten als UTF-8.
 Die Firmware kann dadurch `ä`, `ö`, `ü`, `Ä`, `Ö` und `Ü` korrekt darstellen.
 
+Über **Einstellungen → Wettkampf beenden** lässt sich nach einer Bestätigung der Wettkampf zurücksetzen.
+Dabei werden Startkarten, Zeiten/Ergebnisse, Taster und Bahnzuordnungen gelöscht; der XML-Export wird geleert.
+Der Server sendet den Abschaltbefehl während der eingestellten Dauer (Standard: 10 Sekunden) bei den
+regelmäßigen Display-Abfragen mit. Taster, die in dieser Zeit nicht mit dem Pi verbunden sind, können ihn
+nicht empfangen. Die Buchstaben werden bei der nächsten Anmeldung wieder ab A vergeben.
+
 ---
 
 ## Versionierung

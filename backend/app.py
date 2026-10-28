@@ -95,6 +95,7 @@ class Startcard:
 
 class State(TypedDict):
     settings: dict[str, str]
+    shutdown_until_ms: int
     startcards: dict[str, Any]
     tasters: list[Taster]
     vitals: dict[str, Vital]
@@ -113,14 +114,18 @@ def _default_state() -> State:
             "startcards_suffix": "/export/CSV/Startkarten.csv",
             "auto_next_run_s": "10",
             "stop_lockout_s": "5",
+            "shutdown_grace_s": "10",
         },
+        "shutdown_until_ms": 0,
         "startcards": {
             "loaded": False,
             "last_fetch_ts": None,
             "row_count": 0,
             "rows": [],
             "last_error": None,
-            "url": None,
+            "source_url": None,
+            "max_lane": 0,
+            "runs": [],
         },
         "tasters": [],  # Taster melden sich selbst per POST /api/taster an
         "results": {},
@@ -215,9 +220,60 @@ def api_set_settings() -> ResponseReturnValue:
                 settings[key] = str(max(0, int(payload[key])))
             except (TypeError, ValueError):
                 return jsonify({"ok": False, "error": f"{key} must be a number"}), 400
+    if "shutdown_grace_s" in payload:
+        try:
+            shutdown_grace_s = int(payload["shutdown_grace_s"])
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "shutdown_grace_s must be a number"}), 400
+        if not 1 <= shutdown_grace_s <= 86_400:
+            return jsonify(
+                {"ok": False, "error": "shutdown_grace_s must be between 1 and 86400"}
+            ), 400
+        settings["shutdown_grace_s"] = str(shutdown_grace_s)
     st["settings"] = settings
     save_state(st)
     return jsonify({"ok": True, "settings": settings})
+
+
+@app.post("/api/competition/end")
+def api_end_competition() -> ResponseReturnValue:
+    st = load_state()
+    try:
+        shutdown_grace_s = int(st.get("settings", {}).get("shutdown_grace_s", "10"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid shutdown_grace_s setting"}), 500
+    if not 1 <= shutdown_grace_s <= 86_400:
+        return jsonify({"ok": False, "error": "invalid shutdown_grace_s setting"}), 500
+
+    st["shutdown_until_ms"] = now_ms() + shutdown_grace_s * 1000
+    st["startcards"] = {
+        "loaded": False,
+        "last_fetch_ts": None,
+        "row_count": 0,
+        "rows": [],
+        "last_error": None,
+        "source_url": None,
+        "max_lane": 0,
+        "runs": [],
+    }
+    st["tasters"] = []
+    st["vitals"] = {}
+    st["results"] = {}
+    st["assignments"] = {"mapping": {}, "last_update_ts": None}
+    st["startcards_per_run"] = {}
+    st["triggers_per_run"] = {}
+    st["clock_offsets"] = {}
+    st["current_run"] = 1
+    st["run_finished_ts"] = None
+    save_state(st)
+    _write_heats_xml(st)
+    return jsonify(
+        {
+            "ok": True,
+            "shutdown_until_ms": st["shutdown_until_ms"],
+            "shutdown_grace_s": shutdown_grace_s,
+        }
+    )
 
 
 @app.get("/api/runs")
@@ -425,7 +481,8 @@ def api_post_taster():
         st["tasters"].append(entry)
 
     # Buchstaben in der Reihenfolge der Anmeldung vergeben (A-J, bleibt dauerhaft erhalten)
-    if not entry.get("letter"):
+    shutdown_active = now_ms() < int(st.get("shutdown_until_ms", 0) or 0)
+    if not shutdown_active and not entry.get("letter"):
         used = {t.get("letter") for t in st["tasters"]}
         entry["letter"] = next((c for c in TASTER_LETTERS if c not in used), None)
 
@@ -434,18 +491,43 @@ def api_post_taster():
 
 
 @app.get("/api/startcards")
-def api_load_startcards() -> tuple[ResponseReturnValue, int]:
+def api_get_startcards() -> ResponseReturnValue:
+    state = load_state()
+    startcards = state.get("startcards", {})
+    return jsonify(
+        {
+            **startcards,
+            "rows": startcards.get("rows", []),
+            "max_lane": startcards.get("max_lane", 0),
+            "runs": startcards.get("runs", []),
+            "error": startcards.get("last_error"),
+        }
+    )
+
+
+@app.post("/api/startcards/reload")
+def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
     state = load_state()
 
-    base_url = state["settings"].get("startcards_base_url", None)
-    suffix = state["settings"].get("startcards_suffix", None)
+    payload = request.get_json(force=True, silent=True) or {}
+    settings = state.get("settings", {})
+    base_url = str(
+        payload.get("base_url", settings.get("startcards_base_url", "")) or ""
+    ).strip()
+    suffix = str(payload.get("suffix", settings.get("startcards_suffix", "")) or "").strip()
     if not base_url:
         state["startcards"]["last_error"] = "base_url_missing"
+        save_state(state)
         return jsonify({"ok": False, "error": "base_url_missing"}), 400
 
     if not suffix:
         state["startcards"]["last_error"] = "suffix_missing"
+        save_state(state)
         return jsonify({"ok": False, "error": "suffix_missing"}), 400
+    settings["startcards_base_url"] = base_url
+    settings["startcards_suffix"] = suffix
+    state["settings"] = settings
+    save_state(state)
 
     # Normalisierung: '192.168.x.x:8082' -> 'http://192.168.x.x:8082'
     if not re.match(r"^https?://", base_url, re.IGNORECASE):
@@ -820,6 +902,7 @@ def api_get_display():
 
     out: dict[str, Any] = {
         "role": "none",
+        "shutdown": now < int(st.get("shutdown_until_ms", 0) or 0),
         "lane": None,
         "run": run,
         "state": "ready",

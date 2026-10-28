@@ -212,11 +212,24 @@
               <input type="number" min="0" step="1" id="stopLockoutInput" class="form-control" value="5">
               <div class="form-text">Nach dem Start werden Stopp-Signale der Bahnen so lange ignoriert. 0 = aus.</div>
             </div>
+            <div class="col-md-6">
+              <label class="form-label">Abschaltbefehl gültig für (Sekunden)</label>
+              <input type="number" min="1" max="86400" step="1" id="shutdownGraceInput" class="form-control" value="10">
+              <div class="form-text">Zeit, in der die Taster den Abschaltbefehl vom Server abrufen können (1–86400 Sekunden).</div>
+            </div>
             <div class="col-12 d-flex gap-2 align-items-center">
               <button class="btn btn-primary btn-sm" id="btnSaveSettings">Speichern</button>
               <span class="text-success small d-none" id="settingsSavedMsg">Gespeichert.</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="card border-danger mb-3">
+        <div class="card-body">
+          <h2 class="h6 text-danger mb-2">Wettkampf beenden</h2>
+          <p class="mb-2">Löscht Startkarten, Laufzeiten, Ergebnisse, Taster- und Bahnzuordnungen. Erreichbare Taster schalten sich aus; ihre Buchstaben werden beim nächsten Anmelden neu vergeben.</p>
+          <button class="btn btn-danger btn-sm" id="btnEndCompetition">Wettkampf beenden und Taster ausschalten</button>
         </div>
       </div>
 

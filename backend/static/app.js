@@ -57,6 +57,7 @@ async function loadSettingsIntoUI() {
   byId("suffixDisplay").value = byId("suffixInput").value;
   byId("autoNextInput").value = s.auto_next_run_s ?? "10";
   byId("stopLockoutInput").value = s.stop_lockout_s ?? "5";
+  byId("shutdownGraceInput").value = s.shutdown_grace_s ?? "10";
 }
 
 async function loadStartcardsFromBackend() {
@@ -505,7 +506,8 @@ async function init() {
         startcards_base_url: baseUrl,
         startcards_suffix: suffix,
         auto_next_run_s: byId("autoNextInput").value,
-        stop_lockout_s: byId("stopLockoutInput").value
+        stop_lockout_s: byId("stopLockoutInput").value,
+        shutdown_grace_s: byId("shutdownGraceInput").value
       });
       // mirror to main tab
       await loadSettingsIntoUI();
@@ -514,6 +516,33 @@ async function init() {
       setTimeout(() => msg.classList.add("d-none"), 1500);
     } catch (e) {
       alert("Speichern fehlgeschlagen: " + e.message);
+    }
+  });
+
+  byId("btnEndCompetition").addEventListener("click", async event => {
+    const confirmed = window.confirm(
+      "Wettkampf wirklich beenden?\n\n" +
+      "Startkarten, Laufzeiten, Ergebnisse und Taster-Zuordnungen werden gelöscht. " +
+      "Erreichbare Taster schalten sich aus."
+    );
+    if (!confirmed) return;
+
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const result = await apiPost("/api/competition/end");
+      startcards = { rows: [], max_lane: 0, runs: [], source_url: null, last_fetch_ts: null, error: null };
+      currentRun = null;
+      maxLane = 10;
+      byId("maxLaneLabel").textContent = String(maxLane);
+      updateRunSelect([]);
+      updateStartcardsStatusLine();
+      await Promise.all([loadButtons(), loadRunStatus()]);
+      alert(`Wettkampf beendet. Der Abschaltbefehl ist ${result.shutdown_grace_s} Sekunden aktiv.`);
+    } catch (e) {
+      alert("Wettkampf konnte nicht beendet werden: " + e.message);
+    } finally {
+      button.disabled = false;
     }
   });
 
