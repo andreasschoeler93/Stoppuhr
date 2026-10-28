@@ -15,6 +15,7 @@ class PendingSwapTests(unittest.TestCase):
         for name, fn in (
             ("load_state", lambda: copy.deepcopy(self.state)),
             ("save_state", lambda s: self.state.update(copy.deepcopy(s))),
+            ("_load_ota", lambda: None),
         ):
             p = patch.object(stopwatch, name, side_effect=fn)
             p.start()

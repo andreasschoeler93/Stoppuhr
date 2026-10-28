@@ -75,7 +75,18 @@ ebenfalls eine neue Version eines ausgewählten Laufs anlegen. Bereits gespeiche
 erhalten; Versionen werden separat nummeriert (z. B. `5/2`) und im XML-Export als eigener Heat
 ausgegeben.
 
----
+### Taster-Firmware aktualisieren (ab v0.7.0)
+
+Unter **Einstellungen → Taster-Firmware** listet der Pi alle Firmware-Releases aus GitHub
+(`andreasschoeler93/Taster`, änderbar mit `FIRMWARE_REPO`). **Auf Taster laden** speichert die gewählte
+`firmware.bin` unter `backend/firmware_cache/` (`FIRMWARE_DIR`) und bietet sie allen Tastern an, die gerade online
+sind. Die Taster laden sie selbst vom Pi, prüfen die MD5 und starten neu. Ohne Internet stehen die bereits
+gespeicherten Versionen zur Verfügung.
+
+- Es werden nur Releases ab `v0.11.0` angeboten (frühere Firmware kann sich so nicht installieren lassen).
+- Sobald im Wettkampf ein Lauf gestartet wurde, ist das Update gesperrt und nur nach Eintippen von `UPDATE` möglich.
+- Ein Taster bekommt die Datei nie, solange ein Lauf läuft. Ein fehlgeschlagenes Update wird in der Tabelle angezeigt.
+- Releases entstehen automatisch, wenn im Taster-Repo ein Tag `vX.Y.Z` hochgeladen wird.
 
 ## Versionierung
 

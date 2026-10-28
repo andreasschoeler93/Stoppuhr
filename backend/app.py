@@ -22,13 +22,14 @@ from typing import Any, Final, Optional, TypedDict
 
 import psutil
 import redis
-from flask import Flask, Response, abort, jsonify, render_template, request
+from flask import Flask, Response, abort, jsonify, render_template, request, send_file
 from flask.typing import ResponseReturnValue
+import firmware_store
 import node_info
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.6.3"
+APP_VERSION: Final[str] = "0.7.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -785,6 +786,135 @@ def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
         ), 500
 
 
+OTA_KEY: Final[str] = "OTA_TARGET"
+OTA_CONFIRM_TEXT: Final[str] = "UPDATE"
+
+
+def _competition_started(st: State) -> bool:
+    """True, sobald im Wettkampf irgendein Lauf gestartet wurde."""
+    return any(bool((p or {}).get(STARTER_KEY)) for p in (st.get("triggers_per_run") or {}).values())
+
+
+def _load_ota() -> Optional[dict[str, Any]]:
+    try:
+        raw = redis_store.get(OTA_KEY)
+    except redis.RedisError:  # Anzeige und Trigger duerfen nie am Update-Zustand haengen
+        return None
+    return json.loads(raw) if raw else None
+
+
+def _ota_offer_for(st: State, mac: str) -> dict[str, Any]:
+    """Firmware-Angebot fuer einen Taster (Felder von /api/display); leer, wenn keins ansteht."""
+    target = _load_ota()
+    if not target or not mac or mac not in target.get("macs", []):
+        return {}
+    if (target.get("status") or {}).get(mac, {}).get("state") == "failed":
+        return {}
+    fw = ((st.get("vitals") or {}).get(mac) or {}).get("fw")
+    if fw == target["tag"] or _run_in_progress(st):
+        return {}
+    return {"ota_version": target["tag"], "ota_md5": target["md5"], "ota_size": target["size"]}
+
+
+@app.get("/api/firmware/releases")
+def api_firmware_releases():
+    """Verfuegbare Firmware-Versionen (GitHub, sonst nur lokal gespeicherte) und Stand der Verteilung."""
+    st = load_state()
+    cached = firmware_store.cached_tags()
+    error = None
+    releases: list[dict[str, Any]] = []
+    try:
+        releases = firmware_store.list_releases_cached()
+        releases = [dict(r) for r in releases]
+    except Exception as exc:  # Netzwerk, JSON, Rate-Limit
+        error = f"GitHub nicht erreichbar: {exc}"
+        releases = [{"tag": t, "published": None, "size": None} for t in cached]
+    for r in releases:
+        r["cached"] = r["tag"] in cached
+        r.pop("url", None)
+    tasters = []
+    for t in st.get("tasters", []):
+        info = _taster_with_vitals(t, st.get("vitals") or {})
+        tasters.append({k: info.get(k) for k in ("mac", "name", "letter", "fw", "online", "battery")})
+    target = _load_ota()
+    return jsonify(
+        {
+            "releases": releases,
+            "error": error,
+            "tasters": tasters,
+            "target": target,
+            "competition_started": _competition_started(st),
+            "run_in_progress": _run_in_progress(st),
+            "confirm_text": OTA_CONFIRM_TEXT,
+        }
+    )
+
+
+@app.post("/api/firmware/deploy")
+def api_firmware_deploy():
+    """Gewaehlte Version laden und allen Tastern anbieten, die gerade online sind."""
+    body = request.get_json(silent=True) or {}
+    tag = str(body.get("tag", ""))
+    if firmware_store.parse_tag(tag) is None:
+        return jsonify({"ok": False, "error": "Ungueltige Version"}), 400
+    st = load_state()
+    if _competition_started(st) and str(body.get("confirm", "")) != OTA_CONFIRM_TEXT:
+        return jsonify({"ok": False, "error": "locked", "confirm_text": OTA_CONFIRM_TEXT}), 409
+    info = firmware_store.file_info(tag)
+    if info is None:
+        try:
+            release = next((r for r in firmware_store.list_releases() if r["tag"] == tag), None)
+            if release is None:
+                return jsonify({"ok": False, "error": "Version nicht gefunden"}), 404
+            info = firmware_store.download(tag, release["url"])
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"Download fehlgeschlagen: {exc}"}), 502
+    macs = [
+        t["mac"]
+        for t in (_taster_with_vitals(t, st.get("vitals") or {}) for t in st.get("tasters", []))
+        if t.get("online") and t.get("fw") != tag
+    ]
+    target = {"tag": tag, "md5": info["md5"], "size": info["size"], "macs": macs, "status": {}, "ts": now_ms()}
+    redis_store.set(OTA_KEY, json.dumps(target))
+    logger.info("Firmware %s fuer %d Taster freigegeben", tag, len(macs))
+    return jsonify({"ok": True, "target": target})
+
+
+@app.post("/api/firmware/cancel")
+def api_firmware_cancel():
+    redis_store.delete(OTA_KEY)
+    return jsonify({"ok": True})
+
+
+@app.get("/api/firmware/download")
+def api_firmware_download():
+    """Firmware-Datei fuer einen Taster, dem ein Update angeboten wurde."""
+    st = load_state()
+    mac = request.args.get("mac", "").strip()
+    if not _ota_offer_for(st, mac):
+        abort(404)
+    target = _load_ota()
+    path = firmware_store.cached_file(target["tag"]) if target else None
+    if path is None:
+        abort(404)
+    return send_file(path, mimetype="application/octet-stream", conditional=False)
+
+
+@app.post("/api/ota-status")
+def api_ota_status():
+    """Fehlermeldung eines Tasters zum Update (Erfolg zeigt sich an der neuen Version)."""
+    body = request.get_json(silent=True) or {}
+    mac = str(body.get("mac", "")).strip()
+    target = _load_ota()
+    if not target or mac not in target.get("macs", []):
+        return jsonify({"ok": True})
+    if not body.get("ok", False):
+        target.setdefault("status", {})[mac] = {"state": "failed", "msg": str(body.get("msg", ""))[:60]}
+        redis_store.set(OTA_KEY, json.dumps(target))
+        logger.warning("Firmware-Update von %s fehlgeschlagen: %s", mac, body.get("msg"))
+    return jsonify({"ok": True})
+
+
 @app.get("/api/cluster-status")
 def api_cluster_status():
     """Zustand beider Pis (Zwei-Pi-Betrieb) inkl. Taster je WLAN."""
@@ -1110,6 +1240,7 @@ def api_get_display():
         "last_attempt": None,
         "start_locked_until_ms": int(st.get("start_locked_until_ms", 0) or 0),
     }
+    out.update(_ota_offer_for(st, mac))
     if lane is None:
         pending_lane = next(
             (k for k, v in ((st.get("assignments") or {}).get("pending") or {}).items() if v == mac),

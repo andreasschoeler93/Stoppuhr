@@ -228,6 +228,30 @@
         </div>
       </div>
 
+      <div class="card mb-3" id="firmwareCard">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Taster-Firmware</h2>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label" for="fwSelect">Version</label>
+              <select id="fwSelect" class="form-select"></select>
+            </div>
+            <div class="col-md-6 d-flex gap-2">
+              <button class="btn btn-primary btn-sm" id="btnFwDeploy">Auf Taster laden</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnFwCancel">Abbrechen</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnFwReload">Neu laden</button>
+            </div>
+          </div>
+          <div class="form-text" id="fwHint">Wird auf alle Taster geladen, die gerade online sind. Nie während eines laufenden Laufs.</div>
+          <div class="text-danger small d-none" id="fwError"></div>
+          <div class="text-danger small d-none" id="fwLocked">Der Wettkampf läuft bereits. Ein Update ist nur mit ausdrücklicher Bestätigung möglich.</div>
+          <table class="table table-sm mt-2 mb-0">
+            <thead><tr><th>Taster</th><th>Online</th><th>Version</th><th>Update</th></tr></thead>
+            <tbody id="fwTasters"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card border-danger mb-3">
         <div class="card-body">
           <h2 class="h6 text-danger mb-2">Wettkampf beenden</h2>

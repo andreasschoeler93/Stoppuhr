@@ -47,6 +47,72 @@ async function apiPost(path, body) {
 }
 
 // -----------------------------
+// Taster-Firmware
+// -----------------------------
+let fwInfo = null;
+
+async function refreshFirmware() {
+  fwInfo = await apiGet("/api/firmware/releases");
+  const sel = byId("fwSelect");
+  const previous = sel.value;
+  sel.replaceChildren(...fwInfo.releases.map(r => {
+    const o = document.createElement("option");
+    o.value = r.tag;
+    o.textContent = r.tag + (r.cached ? " (auf dem Pi gespeichert)" : "");
+    return o;
+  }));
+  if (previous && [...sel.options].some(o => o.value === previous)) sel.value = previous;
+  const err = byId("fwError");
+  err.textContent = fwInfo.error || "";
+  err.classList.toggle("d-none", !fwInfo.error);
+  byId("fwLocked").classList.toggle("d-none", !fwInfo.competition_started);
+  const target = fwInfo.target;
+  const tbody = byId("fwTasters");
+  tbody.replaceChildren(...fwInfo.tasters.map(t => {
+    const tr = document.createElement("tr");
+    let status = "–";
+    if (target && target.macs.includes(t.mac)) {
+      const st = (target.status || {})[t.mac];
+      if (t.fw === target.tag) status = "fertig";
+      else if (st && st.state === "failed") status = "fehlgeschlagen (" + (st.msg || "") + ")";
+      else status = "wartet / lädt " + target.tag;
+    }
+    for (const text of [`${t.letter || ""} ${t.name || ""}`.trim(), t.online ? "ja" : "nein", t.fw || "?", status]) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    }
+    return tr;
+  }));
+}
+
+async function deployFirmware() {
+  const tag = byId("fwSelect").value;
+  if (!tag) return;
+  const online = (fwInfo?.tasters || []).filter(t => t.online && t.fw !== tag).length;
+  if (!window.confirm(`Firmware ${tag} auf ${online} online Taster laden?`)) return;
+  let confirmText = "";
+  if (fwInfo?.competition_started) {
+    const typed = window.prompt(
+      "ACHTUNG: Der Wettkampf läuft bereits. Ein Update kann Läufe stören.\n\n" +
+      `Zur Bestätigung ${fwInfo.confirm_text} eintippen:`
+    );
+    if (typed !== fwInfo.confirm_text) return;
+    confirmText = typed;
+  }
+  const btn = byId("btnFwDeploy");
+  btn.disabled = true;
+  try {
+    await apiPost("/api/firmware/deploy", { tag, confirm: confirmText });
+    await refreshFirmware();
+  } catch (e) {
+    alert("Update nicht gestartet: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// -----------------------------
 // Settings / Startcards
 // -----------------------------
 async function loadSettingsIntoUI() {
@@ -672,6 +738,16 @@ async function init() {
   });
 
   byId("btnClearStarter").addEventListener("click", () => unassignLane("starter"));
+  byId("btnFwDeploy").addEventListener("click", deployFirmware);
+  byId("btnFwReload").addEventListener("click", () => refreshFirmware().catch(e => alert("Firmware laden fehlgeschlagen: " + e.message)));
+  byId("btnFwCancel").addEventListener("click", async () => {
+    await apiPost("/api/firmware/cancel").catch(() => {});
+    await refreshFirmware().catch(() => {});
+  });
+  byId("settings-tab").addEventListener("shown.bs.tab", () => refreshFirmware().catch(() => {}));
+  setInterval(() => {
+    if (byId("settings").classList.contains("active")) refreshFirmware().catch(() => {});
+  }, 5000);
   byId("tasterList").addEventListener("click", ev => {
     const b = ev.target.closest(".btn-unassign");
     if (b) unassignLane(b.dataset.lane);
