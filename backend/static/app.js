@@ -693,7 +693,7 @@ async function init() {
     currentRun = serverRun;
     renderLanesTable();
   }
-  setInterval(() => { loadRunStatus().catch(() => {}); }, 500);
+  setInterval(() => { loadRunStatus().catch(() => {}); }, 250);
   setInterval(updateClocks, 50);
   // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
   setInterval(() => {

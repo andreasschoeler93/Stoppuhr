@@ -28,7 +28,7 @@ import node_info
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.6.2"
+APP_VERSION: Final[str] = "0.6.3"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
