@@ -148,6 +148,7 @@ async function loadButtons() {
     temp: t.online ? (t.temp ?? null) : null,
     humidity: t.online ? (t.humidity ?? null) : null,
     ssid: t.online ? (t.ssid ?? null) : null,
+    pending_lane: t.pending_lane || null,
     online: !!t.online
   }));
 
@@ -161,6 +162,10 @@ async function loadButtons() {
         if (!laneAssignments[ln].active) laneAssignments[ln].active = btn.id;
         else if (laneAssignments[ln].active !== btn.id) laneAssignments[ln].pending = btn.id;
       }
+    } else if (btn.role === "none" && btn.pending_lane && btn.pending_lane !== "starter") {
+      // Bereitschaft: Tausch wartet auf den ersten Druck dieses Tasters
+      const ln = Number(btn.pending_lane);
+      if (ln >= 1 && ln <= maxLane) laneAssignments[ln].pending = btn.id;
     }
   });
 
@@ -190,12 +195,40 @@ function vitalsText(btn) {
   return parts.join(" · ");
 }
 
+async function swapNow(lane, mac) {
+  try {
+    await apiPost("/api/assign", { mac, lane: lane === "starter" ? "starter" : Number(lane), immediate: true });
+    await loadButtons();
+  } catch (e) {
+    alert("Tausch fehlgeschlagen: " + e.message);
+  }
+}
+
+function pendingActionsHtml(lane, mac) {
+  return `<div class="mt-1"><button class="btn btn-sm btn-outline-primary btn-swap-now" data-lane="${escapeHtml(String(lane))}" data-mac="${escapeHtml(mac)}">Sofort tauschen</button>
+    <button class="btn btn-sm btn-outline-secondary btn-cancel-pending" data-lane="${escapeHtml(String(lane))}">Abbrechen</button></div>`;
+}
+
+document.addEventListener("click", ev => {
+  const swap = ev.target.closest(".btn-swap-now");
+  if (swap) { swapNow(swap.dataset.lane, swap.dataset.mac); return; }
+  const cancel = ev.target.closest(".btn-cancel-pending");
+  if (cancel) {
+    apiPost("/api/cancel-pending", { lane: cancel.dataset.lane }).then(() => loadButtons())
+      .catch(e => alert("Abbrechen fehlgeschlagen: " + e.message));
+  }
+});
+
 function renderStarter() {
   const box = byId("starterDrop");
   const s = buttons.find(b => b.role === "starter");
-  box.innerHTML = s
+  const p = buttons.find(b => b.role === "none" && b.pending_lane === "starter");
+  const pendingHtml = p
+    ? `<div class="small text-warning">Bereitschaft: Taster ${escapeHtml(p.letter || "?")} wird beim ersten Druck Starter</div>${pendingActionsHtml("starter", p.mac)}`
+    : "";
+  box.innerHTML = (s
     ? `<strong>Taster ${escapeHtml(s.letter || "?")}</strong> <span class="small text-muted">${escapeHtml(s.name)} · ${escapeHtml(vitalsText(s))}</span>`
-    : `<span class="text-muted small">kein Starter – Taster hierher ziehen</span>`;
+    : `<span class="text-muted small">kein Starter – Taster hierher ziehen</span>`) + pendingHtml;
 }
 
 // Messergebnisse des Servers (Zeiten je Lauf und Bahn)
@@ -324,7 +357,9 @@ function renderButtonList() {
     const slotInfo = getSlotForButton(btn.id);
     let slotLabel = "–";
     if (slotInfo.slot) {
-      slotLabel = slotInfo.slot + (slotInfo.role.endsWith("pending") ? " (neu)" : " (aktiv)");
+      slotLabel = slotInfo.slot + (slotInfo.role.endsWith("pending") ? " (Bereitschaft)" : " (aktiv)");
+    } else if (btn.pending_lane === "starter") {
+      slotLabel = "START (Bereitschaft)";
     }
 
     const letter = btn.letter || "?";
@@ -438,7 +473,9 @@ function renderLanesTable() {
     if (activeBtn || pendingBtn) {
       let main = activeBtn ? (activeBtn.letter || "?") : (pendingBtn.letter || "?");
       let extra = "";
-      if (activeBtn && pendingBtn && pendingBtn.id !== activeBtn.id) extra = ` <span class="text-muted">(neu: ${escapeHtml(pendingBtn.letter || "?")})</span>`;
+      if (activeBtn && pendingBtn && pendingBtn.id !== activeBtn.id) {
+        extra = ` <span class="text-warning">(Bereitschaft: ${escapeHtml(pendingBtn.letter || "?")})</span>${pendingActionsHtml(b, pendingBtn.mac)}`;
+      }
       const shown = activeBtn || pendingBtn;
       tasterHtml = `<div class="taster-assigned"><strong>Taster ${escapeHtml(main)}</strong>${extra}<div class="small text-muted">${escapeHtml(vitalsText(shown))}</div></div>`;
     }

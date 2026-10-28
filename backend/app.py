@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.6.1
+# Version: v0.6.2
 # Status: stable-beta
 # ----------------------------------------
 
@@ -28,7 +28,7 @@ import node_info
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.6.1"
+APP_VERSION: Final[str] = "0.6.2"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -136,7 +136,7 @@ def _default_state() -> State:
         },
         "tasters": [],  # Taster melden sich selbst per POST /api/taster an
         "results": {},
-        "assignments": {"mapping": {}, "last_update_ts": None},
+        "assignments": {"mapping": {}, "pending": {}, "last_update_ts": None},
         "vitals": {},  # Maps the mac address to the vitals
         "startcards_per_run": defaultdict(list),
         "triggers_per_run": {},
@@ -320,7 +320,7 @@ def api_end_competition() -> ResponseReturnValue:
     st["tasters"] = []
     st["vitals"] = {}
     st["results"] = {}
-    st["assignments"] = {"mapping": {}, "last_update_ts": None}
+    st["assignments"] = {"mapping": {}, "pending": {}, "last_update_ts": None}
     st["startcards_per_run"] = {}
     st["triggers_per_run"] = {}
     st["clock_offsets"] = {}
@@ -391,8 +391,14 @@ def get_mapping():
 
     # Get the set of MAC addresses that are already assigned to a lane
     mapped_macs = set(current_mapping.values())
+    pending_map = st.get("assignments", {}).get("pending", {}) or {}
+    pending_by_mac = {mac: lane_key for lane_key, mac in pending_map.items()}
     # Filter tasters whose MAC is not in the mapped_macs set
-    unmapped_tasters = [t for t in tasters if t.get("mac") not in mapped_macs]
+    unmapped_tasters = [
+        {**t, "pending_lane": pending_by_mac.get(t.get("mac"))}
+        for t in tasters
+        if t.get("mac") not in mapped_macs
+    ]
 
     return jsonify(
         {
@@ -439,6 +445,7 @@ def api_post_unassign():
 
     lane_key = str(lane)
     current_mapping = st["assignments"]["mapping"]
+    had_pending = st["assignments"].setdefault("pending", {}).pop(lane_key, None) is not None
 
     if lane_key in current_mapping:
         del current_mapping[lane_key]
@@ -446,12 +453,69 @@ def api_post_unassign():
         save_state(st)
         return jsonify({"ok": True, "mapping": current_mapping})
 
+    if had_pending:
+        save_state(st)
     return jsonify({"ok": True, "message": "lane was not assigned"})
+
+
+@app.post("/api/cancel-pending")
+def api_cancel_pending():
+    """Verwirft einen vorgemerkten Tausch (Bereitschaft) fuer eine Bahn bzw. den Starter."""
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    lane = payload.get("lane")
+    if not lane:
+        return jsonify({"ok": False, "error": "missing lane"}), 400
+    pending = st["assignments"].setdefault("pending", {})
+    removed = pending.pop(str(lane), None) is not None
+    if removed:
+        st["assignments"]["last_update_ts"] = now_ms()
+        save_state(st)
+    return jsonify({"ok": True, "removed": removed})
+
+
+def _run_in_progress(st: State) -> bool:
+    """True, wenn der aktuelle Versuch gestartet und noch nicht abgeschlossen ist."""
+    run = st.get("current_run")
+    if run is None or str(run).strip() == "":
+        return False
+    key = _attempt_key(int(run), int(st.get("current_attempt") or 1))
+    presses = (st.get("triggers_per_run") or {}).get(key) or {}
+    return bool(presses.get(STARTER_KEY)) and st.get("run_finished_ts") is None
+
+
+def _try_pending_swap(st: State, mac: str) -> Optional[str]:
+    """
+    Fuehrt einen vorgemerkten Taster-Tausch aus, wenn dieser Taster zum ersten Mal gedrueckt wird.
+
+    Returns:
+        Lane-Schluessel nach erfolgtem Tausch, "waiting" (Lauf laeuft noch) oder None (kein Tausch vorgemerkt).
+    """
+    pending = (st.get("assignments") or {}).get("pending") or {}
+    lane_key = next((k for k, v in pending.items() if v == mac), None)
+    if lane_key is None:
+        return None
+    if _run_in_progress(st):
+        return "waiting"
+    mapping = st["assignments"]["mapping"]
+    for key, mapped in list(mapping.items()):
+        if mapped == mac:
+            del mapping[key]
+    mapping[lane_key] = mac
+    del pending[lane_key]
+    st["assignments"]["last_update_ts"] = now_ms()
+    return lane_key
 
 
 @app.post("/api/assign")
 def api_post_assign():
-    """Assigns a MAC address to a specific lane."""
+    """
+    Assigns a MAC address to a specific lane.
+
+    Ist die Bahn schon mit einem anderen Taster belegt und der neue Taster noch ohne Rolle,
+    wird der Tausch nur vorgemerkt (Bereitschaft). Er greift beim ersten Druck des neuen
+    Tasters, wenn kein Lauf laeuft. Mit "immediate": true wird sofort getauscht.
+    """
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
     mac = payload.get("mac")
@@ -461,12 +525,31 @@ def api_post_assign():
         return jsonify({"ok": False, "error": "missing mac or lane"}), 400
 
     lane_key = str(lane)
+    current_mapping = st["assignments"]["mapping"]
+    pending = st["assignments"].setdefault("pending", {})
+
+    occupant = current_mapping.get(lane_key)
+    if (
+        occupant
+        and occupant != mac
+        and mac not in current_mapping.values()
+        and not payload.get("immediate")
+    ):
+        for key, value in list(pending.items()):
+            if value == mac:
+                del pending[key]
+        pending[lane_key] = mac
+        st["assignments"]["last_update_ts"] = now_ms()
+        save_state(st)
+        return jsonify({"ok": True, "pending": True, "mapping": current_mapping, "pending_map": pending})
 
     # Remove this MAC from any other lanes it might be assigned to
-    current_mapping = st["assignments"]["mapping"]
-    for lane, m in list(current_mapping.items()):
-        if m == mac:
-            del current_mapping[lane]
+    for key, value in list(current_mapping.items()):
+        if value == mac:
+            del current_mapping[key]
+    for key, value in list(pending.items()):
+        if value == mac or key == lane_key:
+            del pending[key]
 
     # Assign the new MAC to the lane
     current_mapping[lane_key] = mac
@@ -892,6 +975,12 @@ def api_post_triggers():
             ts_val += offset
 
     if lane is None:
+        swapped = _try_pending_swap(st, mac_norm)
+        if swapped == "waiting":
+            return jsonify({"ok": True, "ignored": True, "reason": "swap_waiting_for_run_end"})
+        if swapped is not None:
+            save_state(st)
+            return jsonify({"ok": True, "swapped": True, "lane": swapped})
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
     if lane == STARTER_KEY:
@@ -1022,6 +1111,11 @@ def api_get_display():
         "start_locked_until_ms": int(st.get("start_locked_until_ms", 0) or 0),
     }
     if lane is None:
+        pending_lane = next(
+            (k for k, v in ((st.get("assignments") or {}).get("pending") or {}).items() if v == mac),
+            None,
+        )
+        out["pending_lane"] = pending_lane or ""
         return jsonify(out)
 
     previous_attempts = []

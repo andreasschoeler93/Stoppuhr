@@ -45,6 +45,17 @@ sudo nmcli con up br0
 4. Zwei-Pi-Dienste: `bash deploy/zwei-pi/install-zwei-pi.sh koffer` bzw. `... bad`. Abweichende Adressen über `VIP=`, `KOFFER_IP=`, `BAD_IP=`.
    Der normale Dienst `stoppuhr` wird dabei abgeschaltet; keepalived startet ihn nur auf dem arbeitenden Pi.
 
+## Taster tauschen (Bereitschaft, ab Backend v0.6.2 / Firmware v0.10.2)
+
+Ziehst du einen Taster (B) auf eine Bahn oder den Starter, die schon von einem anderen Taster (A) belegt ist, wird nicht sofort getauscht:
+
+1. Taster B geht in **Bereitschaft**: Er wechselt ins Bad-WLAN und zeigt „Bereit: Bahn N“ (bzw. „Bereit: Start“).
+2. Beim **ersten Druck auf Taster B** vor Ort tauschen die Rollen – aber nur, wenn gerade kein Lauf läuft (Start gedrückt, noch nicht abgeschlossen). Läuft einer, bleibt B in Bereitschaft; der Druck wird ignoriert und zählt nie als Messung.
+3. Taster A verliert die Rolle und geht zurück ins Koffer-WLAN.
+
+In der Weboberfläche zeigt die Bahn „Bereitschaft: B“ mit den Knöpfen „Sofort tauschen“ und „Abbrechen“. Eine freie Bahn wird weiterhin sofort belegt. Bei „Entfernen“ der Bahn und bei „Wettkampf beenden“ verfällt die Bereitschaft.
+API: `POST /api/assign` (mit `"immediate": true` sofort), `POST /api/cancel-pending`; `/api/display` liefert `pending_lane`.
+
 ## Weboberfläche
 
 Der Tab „Systemstatus“ zeigt im Zwei-Pi-Betrieb beide Pis: wer arbeitet, Hostname, WLAN-Name, IP-Adressen, Redis-Zustand (Hauptbestand/Kopie, synchron), Stoppuhr-Dienst, letzter Wechsel, CPU/Temperatur/RAM/Disk. Oben rechts steht ein Kennzeichen „Aktiv: Koffer-Pi/Bad-Pi“ (grün = alles gut, gelb = Partner fehlt oder Kopie nicht synchron, rot = niemand arbeitet). Zusätzlich: Anzahl Taster online je WLAN, und je Taster das aktuelle WLAN (ab Firmware v0.10.1).
