@@ -45,6 +45,20 @@ sudo nmcli con up br0
 4. Zwei-Pi-Dienste: `bash deploy/zwei-pi/install-zwei-pi.sh koffer` bzw. `... bad`. Abweichende Adressen über `VIP=`, `KOFFER_IP=`, `BAD_IP=`.
    Der normale Dienst `stoppuhr` wird dabei abgeschaltet; keepalived startet ihn nur auf dem arbeitenden Pi.
 
+## Weboberfläche
+
+Der Tab „Systemstatus“ zeigt im Zwei-Pi-Betrieb beide Pis: wer arbeitet, Hostname, WLAN-Name, IP-Adressen, Redis-Zustand (Hauptbestand/Kopie, synchron), Stoppuhr-Dienst, letzter Wechsel, CPU/Temperatur/RAM/Disk. Oben rechts steht ein Kennzeichen „Aktiv: Koffer-Pi/Bad-Pi“ (grün = alles gut, gelb = Partner fehlt oder Kopie nicht synchron, rot = niemand arbeitet). Zusätzlich: Anzahl Taster online je WLAN, und je Taster das aktuelle WLAN (ab Firmware v0.10.1).
+Jeder Pi liefert seinen Zustand über den Dienst `stoppuhr-knoten` (Port 2000), der immer läuft; so ist der Partner auch im Standby sichtbar.
+
+## Testreihenfolge vor dem Einsatz
+
+1. Beide Pis einrichten, Kabel verbinden. Systemstatus: Koffer-Pi „arbeitet“, Bad-Pi „Bereitschaft“, Daten „Kopie (synchron)“.
+2. Einen Taster ohne Rolle einschalten: Er erscheint im Koffer-WLAN. Rolle zuweisen: Er wechselt ins Bad-WLAN (Anzeige „Taster online je WLAN“).
+3. Testlauf starten, ein paar Zeiten messen.
+4. Koffer-Pi vom Strom trennen: Nach wenigen Sekunden steht oben „Aktiv: Bad-Pi“, Zeiten und Zuordnungen sind noch da, ein Lauf lässt sich starten.
+5. Koffer-Pi wieder einschalten: Er gleicht ab (Daten „Kopie“, dann nach ca. 10 s „arbeitet“). Prüfen, dass die Zeiten aus Schritt 4 noch vorhanden sind.
+6. Kabel ziehen und wieder anstecken, dann „Wettkampf beenden“: Taster kehren ins Koffer-WLAN zurück.
+
 ## Bekannte Grenzen
 
 - Starten beide Pis gleichzeitig ohne Kabelverbindung, arbeiten kurz beide; nach dem Anstecken des Kabels gewinnt der Koffer-Pi, der Bad-Pi gleicht sich an ihm ab.

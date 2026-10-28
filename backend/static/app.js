@@ -147,6 +147,7 @@ async function loadButtons() {
     vbat: t.online ? (t.vbat ?? null) : null,
     temp: t.online ? (t.temp ?? null) : null,
     humidity: t.online ? (t.humidity ?? null) : null,
+    ssid: t.online ? (t.ssid ?? null) : null,
     online: !!t.online
   }));
 
@@ -183,6 +184,7 @@ function vitalsText(btn) {
   const parts = [];
   if (btn.battery_percent != null) parts.push(btn.battery_percent + "%" + (btn.vbat != null ? " (" + Number(btn.vbat).toFixed(2) + " V)" : ""));
   if (btn.rssi_dbm != null) parts.push(btn.rssi_dbm + " dBm");
+  if (btn.ssid) parts.push(btn.ssid);
   if (btn.temp != null) parts.push(Number(btn.temp).toFixed(1) + " °C");
   if (btn.humidity != null) parts.push(Number(btn.humidity).toFixed(0) + " % rF");
   return parts.join(" · ");
@@ -481,6 +483,59 @@ async function refreshSystemStatus() {
   byId("svcStatus").textContent = (s.services && s.services.stoppuhr) ? s.services.stoppuhr : "–";
 
   byId("statusLastRefresh").textContent = "Letzte Aktualisierung: " + new Date().toLocaleTimeString();
+  await refreshCluster().catch(() => {});
+}
+
+function fmtDuration(s) {
+  if (s == null) return "–";
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return (d ? d + " d " : "") + h + " h " + m + " min";
+}
+
+function nodeCardHtml(n, label) {
+  if (!n.reachable) {
+    return `<div class="col-md-6"><div class="border border-danger rounded p-2">
+      <strong>${escapeHtml(label)}</strong> <span class="badge text-bg-danger">nicht erreichbar</span>
+      <div class="small text-muted">${escapeHtml(n.peer_ip || "")}</div></div></div>`;
+  }
+  const ips = Object.entries(n.ips || {}).map(([i, a]) => `${escapeHtml(i)}: ${escapeHtml(a)}`).join(", ") || "–";
+  const rd = n.redis || {};
+  const redisText = rd.role === "master" ? `Hauptbestand (Kopien: ${rd.replicas})`
+    : rd.role === "slave" ? `Kopie (${rd.link === "up" ? "synchron" : "NICHT synchron"})` : "nicht erreichbar";
+  const work = n.has_vip ? `<span class="badge text-bg-success">arbeitet</span>` : `<span class="badge text-bg-secondary">Bereitschaft</span>`;
+  const rc = n.last_role_change ? `${escapeHtml(n.last_role_change.state)} um ${new Date(n.last_role_change.ts).toLocaleTimeString()}` : "–";
+  const hot = n.cpu_temp != null && n.cpu_temp >= 70 ? ' class="text-danger fw-bold"' : "";
+  return `<div class="col-md-6"><div class="border rounded p-2">
+    <strong>${escapeHtml(label)}</strong> ${work}
+    <div class="small">Hostname: ${escapeHtml(n.hostname)}</div>
+    <div class="small">WLAN: ${escapeHtml(n.wifi_ssid || "–")}</div>
+    <div class="small">IP: ${ips}</div>
+    <div class="small">Server-Adresse (VIP): ${n.has_vip ? escapeHtml(n.vip) : "nicht hier"}</div>
+    <div class="small">Stoppuhr-Dienst: ${n.stoppuhr_active ? "läuft" : "gestoppt"}</div>
+    <div class="small">Daten: ${redisText}</div>
+    <div class="small">Letzter Wechsel: ${rc}</div>
+    <div class="small"${hot}>CPU ${n.cpu_percent.toFixed(0)} % · ${n.cpu_temp != null ? n.cpu_temp + " °C" : "– °C"} · RAM ${n.mem_percent.toFixed(0)} % · Disk ${n.disk_percent.toFixed(0)} %</div>
+    <div class="small">Laufzeit: ${fmtDuration(n.uptime_s)}</div></div></div>`;
+}
+
+async function refreshCluster() {
+  const c = await apiGet("/api/cluster-status");
+  const badge = byId("activePiBadge");
+  const card = byId("clusterCard");
+  if (!c.two_pi) { badge.classList.add("d-none"); card.classList.add("d-none"); return; }
+  const label = n => `${n.kind === "bad" ? "Bad-Pi" : n.kind === "koffer" ? "Koffer-Pi" : "Pi"} (${n.hostname || n.peer_ip || "?"})`;
+  const warn = !c.peer.reachable || (c.peer.redis && c.peer.redis.role === "slave" && c.peer.redis.link !== "up");
+  badge.textContent = c.active_hostname
+    ? "Aktiv: " + (c.active_kind === "bad" ? "Bad-Pi" : c.active_kind === "koffer" ? "Koffer-Pi" : c.active_hostname)
+    : "Aktiver Pi unbekannt";
+  badge.className = "badge " + (!c.active_hostname ? "text-bg-danger" : warn ? "text-bg-warning" : "text-bg-success");
+  card.classList.remove("d-none");
+  byId("clusterSummary").innerHTML = !c.peer.reachable
+    ? `<span class="text-danger">Partner-Pi nicht erreichbar – keine Sicherung, bitte prüfen.</span>`
+    : warn ? `<span class="text-warning">Kopie noch nicht synchron.</span>` : `<span class="text-success">Beide Pis erreichbar, Daten synchron.</span>`;
+  byId("clusterNodes").innerHTML = nodeCardHtml(c.self, label(c.self) + " – dieser Server") + nodeCardHtml(c.peer, label(c.peer));
+  const w = Object.entries(c.tasters_per_wifi || {}).map(([s, n]) => `${s}: ${n}`).join(" · ");
+  byId("clusterWifi").textContent = w ? "Taster online je WLAN: " + w : "Keine Taster online.";
 }
 
 // -----------------------------
@@ -590,6 +645,7 @@ async function init() {
 
   // initial loads
   await refreshSystemStatus().catch(() => {});
+  setInterval(() => refreshCluster().catch(() => {}), 10000);
   await loadButtons().catch(() => {});
   renderTestButtons();
   await loadRunStatus().catch(() => {});

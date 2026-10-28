@@ -29,7 +29,14 @@ fi
 sudo systemctl restart redis-server
 
 echo "== Umgebung und Skripte =="
-printf 'VIP=%s\nPEER_IP=%s\n' "$VIP" "$PEER_IP" | sudo tee /etc/stoppuhr-zwei-pi.env >/dev/null
+printf 'VIP=%s\nPEER_IP=%s\nROLLE=%s\n' "$VIP" "$PEER_IP" "$ROLLE" | sudo tee /etc/stoppuhr-zwei-pi.env >/dev/null
+# Die Stoppuhr kennt damit Partner und VIP; der Knotenstatus-Dienst laeuft immer
+sudo mkdir -p /etc/systemd/system/stoppuhr.service.d
+printf '[Service]\nEnvironmentFile=/etc/stoppuhr-zwei-pi.env\n' | sudo tee /etc/systemd/system/stoppuhr.service.d/zwei-pi.conf >/dev/null
+DIR="$(cd "$HIER/../.." && pwd)"
+sed -e "s|__DIR__|$DIR|g" "$HIER/stoppuhr-knoten.service" | sudo tee /etc/systemd/system/stoppuhr-knoten.service >/dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable --now stoppuhr-knoten
 sudo install -m 755 "$HIER/stoppuhr-pruefen.sh" /usr/local/bin/stoppuhr-pruefen.sh
 sudo install -m 755 "$HIER/stoppuhr-rolle.sh" /usr/local/bin/stoppuhr-rolle.sh
 sed -e "s|__PRIORITY__|$PRIO|" -e "s|__OWN_IP__|$OWN_IP|" -e "s|__PEER_IP__|$PEER_IP|" -e "s|__VIP__|$VIP|" \

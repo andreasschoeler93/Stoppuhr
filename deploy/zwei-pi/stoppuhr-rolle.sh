@@ -2,6 +2,9 @@
 # Wird von keepalived bei jedem Rollenwechsel aufgerufen: $1=GROUP $2=Name $3=Zustand
 source /etc/stoppuhr-zwei-pi.env
 
+# Zeitpunkt des Wechsels merken (wird in der Weboberflaeche angezeigt)
+echo "$(date +%s) $3" > /var/lib/stoppuhr-rollenwechsel
+
 case "$3" in
   MASTER)
     # Kopie zum Hauptbestand machen und die Stoppuhr starten

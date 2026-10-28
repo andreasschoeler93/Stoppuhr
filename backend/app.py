@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.6.0
+# Version: v0.6.1
 # Status: stable-beta
 # ----------------------------------------
 
@@ -24,10 +24,11 @@ import psutil
 import redis
 from flask import Flask, Response, abort, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
+import node_info
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.6.0"
+APP_VERSION: Final[str] = "0.6.1"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -56,6 +57,7 @@ class Vital(TypedDict):
     rssi: Optional[int]
     fw: Optional[str]
     uptime_s: Optional[int]
+    ssid: Optional[str]
 
 
 TASTER_LETTERS = "ABCDEFGHIJ"
@@ -366,6 +368,7 @@ def _taster_with_vitals(taster: Taster, vitals: dict[str, Vital]) -> dict[str, A
         "temp": v.get("temp"),
         "humidity": v.get("humidity"),
         "fw": v.get("fw"),
+        "ssid": v.get("ssid"),
         "last_seen_ts": last_seen,
         "online": bool(last_seen) and now_ms() - int(last_seen) <= TASTER_ONLINE_TIMEOUT_MS,
     }
@@ -497,6 +500,7 @@ def api_post_vitals():
         "rssi": payload.get("rssi"),
         "fw": payload.get("fw"),
         "uptime_s": payload.get("uptime_s"),
+        "ssid": payload.get("ssid"),
     }
     st["vitals"][mac] = new_vital
     # Uhrversatz Taster -> Server lernen (Server-Zeit minus Taster-Zeit); Sprung nach unten
@@ -696,6 +700,22 @@ def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
         return jsonify(
             {"ok": False, "error": state["startcards"]["last_error"], "source_url": url}
         ), 500
+
+
+@app.get("/api/cluster-status")
+def api_cluster_status():
+    """Zustand beider Pis (Zwei-Pi-Betrieb) inkl. Taster je WLAN."""
+    st = load_state()
+    per_wifi: dict[str, int] = defaultdict(int)
+    for t in st.get("tasters", []):
+        v = (st.get("vitals") or {}).get(t.get("mac")) or {}
+        online = bool(v.get("ts")) and now_ms() - int(v["ts"]) <= TASTER_ONLINE_TIMEOUT_MS
+        if online:
+            per_wifi[v.get("ssid") or "unbekannt"] += 1
+    data = node_info.cluster_status()
+    data["tasters_per_wifi"] = dict(per_wifi)
+    data["version"] = APP_VERSION
+    return jsonify(data)
 
 
 @app.get("/api/system-status")

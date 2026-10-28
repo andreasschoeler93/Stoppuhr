@@ -1,0 +1,13 @@
+[Unit]
+Description=Stoppuhr-Knotenstatus (Zwei-Pi-Betrieb)
+After=network-online.target
+
+[Service]
+User=root
+WorkingDirectory=__DIR__/backend
+EnvironmentFile=/etc/stoppuhr-zwei-pi.env
+ExecStart=__DIR__/.venv/bin/python knoten_dienst.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
