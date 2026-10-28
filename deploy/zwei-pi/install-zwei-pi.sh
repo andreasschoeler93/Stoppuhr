@@ -17,6 +17,50 @@ case "$ROLLE" in
   *) echo "Aufruf: $0 koffer|bad"; exit 1 ;;
 esac
 
+AP_SSID="${AP_SSID:-}"
+AP_PSK="${AP_PSK:-}"
+
+if ! ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP"; then
+  if [ -z "$AP_SSID" ] || [ -z "$AP_PSK" ]; then
+    echo "br0 mit $OWN_IP fehlt. Entweder Bridge selbst einrichten (README) oder neu starten mit:"
+    echo "  AP_SSID=NAME AP_PSK=PASSWORT bash $0 $ROLLE"
+    exit 1
+  fi
+  if [ "${#AP_PSK}" -lt 8 ]; then echo "AP_PSK braucht mindestens 8 Zeichen."; exit 1; fi
+  # Laeuft die SSH-Sitzung ueber das WLAN, wuerde sie beim Umbau abreissen
+  SSH_DEV=""
+  if [ -n "${SSH_CONNECTION:-}" ]; then
+    SSH_IP="$(echo "$SSH_CONNECTION" | awk '{print $3}')"
+    SSH_DEV="$(ip -o -4 addr show | awk -v ip="$SSH_IP" '$4 ~ "^"ip"/" {print $2}')"
+  fi
+  if [ "$SSH_DEV" = "wlan0" ] && [ "${FORCE:-0}" != "1" ]; then
+    echo "Du bist per WLAN verbunden; der Umbau wuerde die Sitzung beenden."
+    echo "Bitte per Kabel/Monitor ausfuehren (oder FORCE=1 setzen)."
+    exit 1
+  fi
+  echo "== Netz: Bridge br0 ($OWN_IP) und WLAN-Zugangspunkt $AP_SSID =="
+  ALT="$(nmcli -t -f NAME,DEVICE con show --active | awk -F: '$2=="eth0"{print $1; exit}')"
+  sudo nmcli con delete br0 br0-eth0 ap >/dev/null 2>&1 || true
+  sudo nmcli con add type bridge ifname br0 con-name br0 ipv4.method manual ipv4.addresses "$OWN_IP/24" bridge.stp no
+  sudo nmcli con add type bridge-slave ifname eth0 con-name br0-eth0 master br0
+  sudo nmcli con add type wifi ifname wlan0 con-name ap ssid "$AP_SSID" mode ap wifi.hidden yes \
+    wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$AP_PSK" connection.master br0 connection.slave-type bridge
+  if ! { sudo nmcli con up br0 && sudo nmcli con up br0-eth0 && sudo nmcli con up ap; }; then
+    sleep 3
+  fi
+  OK=0
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP"; then OK=1; break; fi
+    sleep 1
+  done
+  if [ "$OK" != "1" ]; then
+    echo "Bridge kam nicht hoch. Alter Zustand wird wiederhergestellt."
+    sudo nmcli con delete ap br0-eth0 br0 >/dev/null 2>&1 || true
+    [ -n "$ALT" ] && sudo nmcli con up "$ALT" || true
+    exit 1
+  fi
+fi
+
 echo "== Pakete =="
 sudo apt-get install -y keepalived redis-tools
 

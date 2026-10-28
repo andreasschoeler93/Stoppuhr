@@ -30,7 +30,10 @@ Taster ohne Rolle sind im Koffer-WLAN. Mit Rollenzuweisung wechseln sie sofort i
 ## Einrichtung (je Pi)
 
 1. `bash deploy/install.sh` (wie bisher).
-2. Bridge und WLAN-Zugangspunkt (Beispiel Koffer-Pi, beim Bad-Pi IP `.12`, andere SSID):
+2. Bridge und WLAN-Zugangspunkt: das erledigt `install-zwei-pi.sh` selbst, wenn `AP_SSID` und `AP_PSK` gesetzt sind
+   (`AP_SSID=KOFFER-SSID AP_PSK=PASSWORT bash deploy/zwei-pi/install-zwei-pi.sh koffer`). Kommt die Bridge nicht hoch, stellt es
+   den alten Zustand wieder her. Per WLAN-SSH bricht es ab (Umbau würde die Sitzung kappen; `FORCE=1` übergeht das), besser per Kabel.
+   Von Hand (Beispiel Koffer-Pi, beim Bad-Pi IP `.12`, andere SSID):
 
 ```bash
 sudo nmcli con add type bridge ifname br0 con-name br0 ipv4.method manual ipv4.addresses 192.168.50.11/24 bridge.stp no
