@@ -88,6 +88,17 @@ gespeicherten Versionen zur Verfügung.
 - Ein Taster bekommt die Datei nie, solange ein Lauf läuft. Ein fehlgeschlagenes Update wird in der Tabelle angezeigt.
 - Releases entstehen automatisch, wenn im Taster-Repo ein Tag `vX.Y.Z` hochgeladen wird.
 
+### Pi-Software wechseln (ab v0.7.1)
+
+Unter **Einstellungen → Pi-Software** wählst du eine Version (Git-Tag ab `v0.5.1`) und klickst auf
+**Übernehmen und neu starten**. Der Pi holt die Tags von GitHub, wechselt darauf (`git checkout`), installiert
+geänderte Abhängigkeiten und beendet den Dienst; systemd startet ihn mit der neuen Version wieder (ca. 5 s).
+
+- Nur bei der Installation ohne Docker (Git-Checkout). Bei lokalen Änderungen im Ordner bricht der Wechsel mit Fehlermeldung ab.
+- Gesperrt, solange ein Lauf läuft; nach dem ersten gestarteten Lauf nur nach Eintippen von `UPDATE`.
+- Wechselt nur den Pi, dessen Weboberfläche du gerade bedienst (im Zwei-Pi-Betrieb beide einzeln).
+- Der Stand ist danach „detached“ auf dem Tag. Zurück zum Branch: `git switch main` (bzw. `feature/taster-anmeldung`).
+
 ## Versionierung
 
 - Produktive Basis: **v0.5.1**

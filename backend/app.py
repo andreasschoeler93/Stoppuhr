@@ -13,6 +13,7 @@ import os
 import re
 import socket
 import struct
+import threading
 import time
 import unicodedata
 import urllib.request
@@ -26,10 +27,11 @@ from flask import Flask, Response, abort, jsonify, render_template, request, sen
 from flask.typing import ResponseReturnValue
 import firmware_store
 import node_info
+import pi_update
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.7.0"
+APP_VERSION: Final[str] = "0.7.1"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -913,6 +915,50 @@ def api_ota_status():
         redis_store.set(OTA_KEY, json.dumps(target))
         logger.warning("Firmware-Update von %s fehlgeschlagen: %s", mac, body.get("msg"))
     return jsonify({"ok": True})
+
+
+@app.get("/api/pi-update/releases")
+def api_pi_update_releases():
+    """Verfuegbare Software-Versionen (Git-Tags) des Pi."""
+    st = load_state()
+    base = {
+        "version": APP_VERSION,
+        "competition_started": _competition_started(st),
+        "run_in_progress": _run_in_progress(st),
+        "confirm_text": OTA_CONFIRM_TEXT,
+    }
+    if not pi_update.available():
+        return jsonify({**base, "supported": False, "tags": [], "error": "Kein Git-Checkout (Docker?)", "current": {}})
+    try:
+        tags, error = pi_update.list_tags()
+    except Exception as exc:
+        tags, error = [], str(exc)
+    return jsonify({**base, "supported": True, "tags": tags, "error": error, "current": pi_update.current()})
+
+
+@app.post("/api/pi-update/deploy")
+def api_pi_update_deploy():
+    """Auf die gewaehlte Version wechseln und den Dienst neu starten (systemd startet ihn wieder)."""
+    body = request.get_json(silent=True) or {}
+    tag = str(body.get("tag", ""))
+    if pi_update.parse_tag(tag) is None:
+        return jsonify({"ok": False, "error": "Ungueltige Version"}), 400
+    if not pi_update.available():
+        return jsonify({"ok": False, "error": "Kein Git-Checkout (Docker?)"}), 400
+    st = load_state()
+    if _run_in_progress(st):
+        return jsonify({"ok": False, "error": "Ein Lauf laeuft gerade"}), 409
+    if _competition_started(st) and str(body.get("confirm", "")) != OTA_CONFIRM_TEXT:
+        return jsonify({"ok": False, "error": "locked", "confirm_text": OTA_CONFIRM_TEXT}), 409
+    try:
+        commit = pi_update.switch_to(tag)
+    except Exception as exc:
+        logger.error("Pi-Update auf %s fehlgeschlagen: %s", tag, exc)
+        return jsonify({"ok": False, "error": f"Wechsel fehlgeschlagen: {exc}"}), 500
+    logger.warning("Pi-Software auf %s (%s) gewechselt, Neustart", tag, commit)
+    # Antwort erst ausliefern, dann beenden; systemd (Restart=always) startet den Dienst neu
+    threading.Timer(1.0, os._exit, args=(0,)).start()
+    return jsonify({"ok": True, "tag": tag, "commit": commit, "restarting": True})
 
 
 @app.get("/api/cluster-status")

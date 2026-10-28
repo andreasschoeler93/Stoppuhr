@@ -228,6 +228,26 @@
         </div>
       </div>
 
+      <div class="card mb-3" id="piUpdateCard">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Pi-Software</h2>
+          <div class="small mb-2">Läuft: <strong id="piCurrent">–</strong></div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label" for="piSelect">Version</label>
+              <select id="piSelect" class="form-select"></select>
+            </div>
+            <div class="col-md-6 d-flex gap-2">
+              <button class="btn btn-primary btn-sm" id="btnPiDeploy">Übernehmen und neu starten</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnPiReload">Neu laden</button>
+            </div>
+          </div>
+          <div class="form-text">Wechselt nur diesen Pi. Der Dienst ist danach kurz (ca. 5 s) nicht erreichbar. Nie während eines laufenden Laufs.</div>
+          <div class="text-danger small d-none" id="piError"></div>
+          <div class="text-danger small d-none" id="piLocked">Der Wettkampf läuft bereits. Ein Wechsel ist nur mit ausdrücklicher Bestätigung möglich.</div>
+        </div>
+      </div>
+
       <div class="card mb-3" id="firmwareCard">
         <div class="card-body">
           <h2 class="h6 mb-2">Taster-Firmware</h2>

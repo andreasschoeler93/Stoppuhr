@@ -113,6 +113,67 @@ async function deployFirmware() {
 }
 
 // -----------------------------
+// Pi-Software
+// -----------------------------
+let piInfo = null;
+
+async function refreshPiUpdate() {
+  piInfo = await apiGet("/api/pi-update/releases");
+  const cur = piInfo.current || {};
+  const where = cur.tag || (cur.branch ? cur.branch + " @ " : "") + (cur.commit || "");
+  byId("piCurrent").textContent = `v${piInfo.version}` + (where ? ` (${where})` : "");
+  const sel = byId("piSelect");
+  const previous = sel.value;
+  sel.replaceChildren(...piInfo.tags.map(tag => {
+    const o = document.createElement("option");
+    o.value = tag;
+    o.textContent = tag + (tag === cur.tag ? " (läuft)" : "");
+    return o;
+  }));
+  if (previous && [...sel.options].some(o => o.value === previous)) sel.value = previous;
+  else if (cur.tag && [...sel.options].some(o => o.value === cur.tag)) sel.value = cur.tag;
+  const err = byId("piError");
+  err.textContent = piInfo.error || "";
+  err.classList.toggle("d-none", !piInfo.error);
+  byId("piLocked").classList.toggle("d-none", !piInfo.competition_started);
+  byId("btnPiDeploy").disabled = !piInfo.supported;
+}
+
+async function deployPi() {
+  const tag = byId("piSelect").value;
+  if (!tag) return;
+  if (!window.confirm(`Pi-Software auf ${tag} wechseln? Der Dienst startet neu.`)) return;
+  let confirmText = "";
+  if (piInfo?.competition_started) {
+    const typed = window.prompt(
+      "ACHTUNG: Der Wettkampf läuft bereits. Der Neustart unterbricht den Server kurz.\n\n" +
+      `Zur Bestätigung ${piInfo.confirm_text} eintippen:`
+    );
+    if (typed !== piInfo.confirm_text) return;
+    confirmText = typed;
+  }
+  const btn = byId("btnPiDeploy");
+  btn.disabled = true;
+  try {
+    await apiPost("/api/pi-update/deploy", { tag, confirm: confirmText });
+  } catch (e) {
+    alert("Wechsel nicht möglich: " + e.message);
+    btn.disabled = false;
+    return;
+  }
+  btn.textContent = "Startet neu …";
+  // Warten, bis der Dienst wieder antwortet, dann Seite neu laden
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      await apiGet("/api/version");
+      if (i >= 2) break;
+    } catch (_) { /* noch nicht erreichbar */ }
+  }
+  location.reload();
+}
+
+// -----------------------------
 // Settings / Startcards
 // -----------------------------
 async function loadSettingsIntoUI() {
@@ -739,12 +800,17 @@ async function init() {
 
   byId("btnClearStarter").addEventListener("click", () => unassignLane("starter"));
   byId("btnFwDeploy").addEventListener("click", deployFirmware);
+  byId("btnPiDeploy").addEventListener("click", deployPi);
+  byId("btnPiReload").addEventListener("click", () => refreshPiUpdate().catch(e => alert("Versionen laden fehlgeschlagen: " + e.message)));
   byId("btnFwReload").addEventListener("click", () => refreshFirmware().catch(e => alert("Firmware laden fehlgeschlagen: " + e.message)));
   byId("btnFwCancel").addEventListener("click", async () => {
     await apiPost("/api/firmware/cancel").catch(() => {});
     await refreshFirmware().catch(() => {});
   });
-  byId("settings-tab").addEventListener("shown.bs.tab", () => refreshFirmware().catch(() => {}));
+  byId("settings-tab").addEventListener("shown.bs.tab", () => {
+    refreshFirmware().catch(() => {});
+    refreshPiUpdate().catch(() => {});
+  });
   setInterval(() => {
     if (byId("settings").classList.contains("active")) refreshFirmware().catch(() => {});
   }, 5000);
