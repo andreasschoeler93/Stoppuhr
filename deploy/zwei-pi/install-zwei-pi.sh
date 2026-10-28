@@ -21,7 +21,11 @@ echo "== Pakete =="
 sudo apt-get install -y keepalived redis-tools
 
 echo "== Redis: im LAN erreichbar, damit die Kopie funktioniert =="
-sudo sed -i 's/^bind .*/bind 127.0.0.1 '"$OWN_IP"'/' /etc/redis/redis.conf
+if ! ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP"; then
+  echo "Hinweis: br0 mit $OWN_IP fehlt noch (Bridge zuerst einrichten, siehe README). Redis startet trotzdem."
+fi
+# "-" vor der Adresse: Redis startet auch, wenn die Adresse noch nicht existiert
+sudo sed -i 's/^bind .*/bind 127.0.0.1 -'"$OWN_IP"'/' /etc/redis/redis.conf
 sudo sed -i 's/^protected-mode .*/protected-mode no/' /etc/redis/redis.conf
 if [ "$ROLLE" = "bad" ]; then
   # Bad-Pi startet als Kopie des Koffer-Pi
