@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.9.8 | 2026-10-29 | Ausfallübernahme: Zeitlimit des Prüfskripts auf 1 s (unter dem keepalived-Intervall), sonst übersprang keepalived die Prüfung und der Bad-Pi übernahm nicht. |
 | v0.9.7 | 2026-10-29 | Ausfallübernahme: Stehen beide Pis als Redis-Kopie voneinander, wird der Koffer-Pi Hauptbestand (vorher übernahm keiner). |
 | v0.9.6 | 2026-10-29 | Ausfallübernahme: Das Prüfskript hängt nicht mehr, wenn der Partner-Pi ausfällt (Zeitlimit für die Redis-Abfrage). Vorher übernahm der Bad-Pi bei gezogenem Kabel des Koffer-Pi nicht. |
 | v0.9.5 | 2026-10-29 | Aktiver Pi wird erkannt, auch wenn die gemeinsame Adresse die zweite Adresse einer Schnittstelle ist („Aktiver Pi unbekannt“). Zwei-Pi-Skript entfernt die alte dnsmasq-Konfiguration des Einzelbetriebs. |
