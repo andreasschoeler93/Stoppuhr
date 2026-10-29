@@ -5,7 +5,7 @@
 # vollstaendig synchron ist. So geht nach einem Neustart nichts verloren.
 source /etc/stoppuhr-zwei-pi.env
 
-info() { redis-cli "$@" info replication 2>/dev/null | tr -d '\r'; }
+info() { timeout 2 redis-cli "$@" info replication 2>/dev/null | tr -d '\r'; }  # Zeitlimit: ein ausgefallener Partner darf das Skript nicht blockieren
 peer_role=$(info -h "$PEER_IP" | awk -F: '/^role:/{print $2}')
 my_role=$(info | awk -F: '/^role:/{print $2}')
 [ -z "$my_role" ] && exit 1   # eigenes Redis laeuft nicht

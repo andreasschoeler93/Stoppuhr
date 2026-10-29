@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.9.5
+# Version: v0.9.6
 # Status: stable-beta
 # ----------------------------------------
 
@@ -35,7 +35,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.9.5"
+APP_VERSION: Final[str] = "0.9.6"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
