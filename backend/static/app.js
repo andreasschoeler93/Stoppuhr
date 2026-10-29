@@ -36,7 +36,6 @@ const VITAL_CHARTS = [
 // Pi-Diagramme: idx zeigt auf die Spalte im Pi-Messpunkt [ts, CPU-Temperatur, CPU-Last, Speicher]
 const PI_CHARTS = [
   { id: "pi1", idx: 1, title: "Pi CPU-Temperatur", unit: "°C", pi: true, decimals: 1 },
-  { id: "pi2", idx: 2, title: "Pi CPU-Last", unit: "%", pi: true, min: 0, max: 100 },
 ];
 const PI_COLORS = { "Koffer-Pi": "#0d6efd", "Bad-Pi": "#fd7e14", "Pi": "#0d6efd" };
 let vitalsData = null;
@@ -108,7 +107,7 @@ function drawVitals() {
     box.innerHTML = VITAL_CHARTS.concat(PI_CHARTS).map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
       <strong class="small">${c.title} (${c.unit})</strong>
       <canvas id="vc-${c.id || c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("") +
-      `<div class="col-lg-6"><div class="card h-100"><div class="card-body p-2">
+      `<div class="col-12"><div class="card h-100"><div class="card-body p-2">
       <strong class="small">Zustand der Taster und Pis</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>`;
   }
   byId("vitalsStatus").innerHTML = vitalsStatusHtml() + piStatusHtml();
