@@ -5,7 +5,8 @@ liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `
 
 > **Der Pi wertet aus. Die Taster messen Zeit. Nichts geht verloren.**
 
-Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Zwei-Pi-Betrieb (Koffer und Bad): [deploy/zwei-pi/README.md](deploy/zwei-pi/README.md).
+Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Zwei-Pi-Betrieb (Koffer und Bad): Schritt-für-Schritt-Anleitung in
+[docs/INSTALLATION-ZWEI-PI.md](docs/INSTALLATION-ZWEI-PI.md), Hintergründe in [deploy/zwei-pi/README.md](deploy/zwei-pi/README.md).
 
 ## Funktionen
 
