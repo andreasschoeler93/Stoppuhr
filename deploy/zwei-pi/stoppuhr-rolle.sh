@@ -12,8 +12,15 @@ case "$3" in
     systemctl start stoppuhr
     ;;
   BACKUP|FAULT)
-    # Arbeit abgeben, Daten vom neuen Hauptpi als Kopie halten
+    # Arbeit abgeben, Daten vom neuen Hauptpi als Kopie halten.
+    # Hat dieser Pi aber mehr neue Daten (Kabel war getrennt, Lauf lief hier), nicht ueberschreiben:
+    # Der Partner gleicht sich dann selbst an uns an (stoppuhr-pruefen.sh).
     systemctl stop stoppuhr
+    off() { timeout 2 redis-cli "$@" info replication 2>/dev/null | tr -d '\r' | awk -F: '/^master_repl_offset:/{print $2}'; }
+    mine=$(off); peer=$(off -h "$PEER_IP")
+    if [ "${mine:-0}" -gt "${peer:-0}" ] && [ -n "$peer" ]; then
+      exit 0
+    fi
     redis-cli replicaof "$PEER_IP" 6379 >/dev/null
     ;;
 esac

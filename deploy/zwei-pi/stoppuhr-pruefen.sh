@@ -10,10 +10,21 @@ peer_role=$(info -h "$PEER_IP" | awk -F: '/^role:/{print $2}')
 my_role=$(info | awk -F: '/^role:/{print $2}')
 [ -z "$my_role" ] && exit 1   # eigenes Redis laeuft nicht
 
-if [ "$peer_role" = "master" ] && [ "$my_role" = "master" ] && ! ip -4 addr show | grep -q " ${VIP}/"; then
-  # Partner arbeitet, wir haben nur alte Daten: erst von ihm abgleichen
-  redis-cli replicaof "$PEER_IP" 6379 >/dev/null
-  exit 1
+off() { info "$@" | awk -F: '/^master_repl_offset:/{print $2}'; }
+
+if [ "$peer_role" = "master" ] && [ "$my_role" = "master" ]; then
+  # Beide Hauptbestand (Kabel war getrennt): wer weniger neue Daten hat, gleicht sich am anderen ab.
+  # Mit der gemeinsamen Adresse wird nur bei klar weniger Daten nachgegeben, ohne schon bei Gleichstand.
+  mo=$(off); po=$(off -h "$PEER_IP"); mo=${mo:-0}; po=${po:-0}
+  if ip -4 addr show | grep -q " ${VIP}/"; then
+    [ "$po" -gt "$mo" ] && geben=1 || geben=0
+  else
+    [ "$po" -ge "$mo" ] && geben=1 || geben=0
+  fi
+  if [ "$geben" = "1" ]; then
+    redis-cli replicaof "$PEER_IP" 6379 >/dev/null
+    exit 1
+  fi
 fi
 
 if [ "$my_role" = "slave" ] && [ "$peer_role" = "slave" ]; then

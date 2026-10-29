@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.9.9 | 2026-10-29 | Ausfallübernahme: Nach getrenntem Kabel behält der Pi mit den neueren Daten seinen Bestand, der andere gleicht sich daran an. Vorher überschrieb der zurückkehrende Koffer-Pi die Läufe des Bad-Pi. |
 | v0.9.8 | 2026-10-29 | Ausfallübernahme: Zeitlimit des Prüfskripts auf 1 s (unter dem keepalived-Intervall), sonst übersprang keepalived die Prüfung und der Bad-Pi übernahm nicht. |
 | v0.9.7 | 2026-10-29 | Ausfallübernahme: Stehen beide Pis als Redis-Kopie voneinander, wird der Koffer-Pi Hauptbestand (vorher übernahm keiner). |
 | v0.9.6 | 2026-10-29 | Ausfallübernahme: Das Prüfskript hängt nicht mehr, wenn der Partner-Pi ausfällt (Zeitlimit für die Redis-Abfrage). Vorher übernahm der Bad-Pi bei gezogenem Kabel des Koffer-Pi nicht. |
