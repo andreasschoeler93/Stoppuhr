@@ -35,7 +35,7 @@ const VITAL_CHARTS = [
 ];
 // Pi-Diagramme: idx zeigt auf die Spalte im Pi-Messpunkt [ts, CPU-Temperatur, CPU-Last, Speicher]
 const PI_CHARTS = [
-  { id: "pi1", idx: 1, title: "Pi CPU-Temperatur", unit: "°C", pi: true, decimals: 1 },
+  { id: "pi1", idx: 1, idx2: 2, title: "Pi CPU-Temperatur (durchgezogen) und CPU-Last (gestrichelt)", unit: "°C / %", pi: true, min: 0, max: 100 },
 ];
 const PI_COLORS = { "Koffer-Pi": "#0d6efd", "Bad-Pi": "#fd7e14", "Pi": "#0d6efd" };
 let vitalsData = null;
@@ -124,7 +124,8 @@ function drawVitalChart(c, series) {
   const g = cv.getContext("2d");
   g.scale(dpr, dpr);
   g.clearRect(0, 0, w, h);
-  const lines = series.map(s => ({ color: s.color, data: s.points.filter(p => p[c.idx] !== null).map(p => [p[0], p[c.idx]]) }));
+  const cols = c.idx2 ? [[c.idx, false], [c.idx2, true]] : [[c.idx, false]];
+  const lines = cols.flatMap(([ci, dash]) => series.map(s => ({ dash, color: s.color, data: s.points.filter(p => p[ci] !== null).map(p => [p[0], p[ci]]) })));
   const all = lines.flatMap(l => l.data.map(d => d[1]));
   if (!all.length) { g.fillStyle = "#888"; g.font = "12px sans-serif"; g.fillText("keine Daten", 10, 20); return; }
   const dec = c.decimals ?? 0;
@@ -159,7 +160,7 @@ function drawVitalChart(c, series) {
   g.restore();
   g.lineWidth = 1.6;
   lines.forEach(l => {
-    g.strokeStyle = l.color; g.beginPath();
+    g.strokeStyle = l.color; g.setLineDash(l.dash ? [5, 3] : []); g.beginPath();
     let prev = null;
     l.data.forEach(([t, v]) => {
       // Luecke ueber 2 Minuten (Taster aus): Linie unterbrechen
