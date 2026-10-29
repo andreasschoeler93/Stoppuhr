@@ -34,36 +34,35 @@ const VITAL_CHARTS = [
   { idx: 5, title: "WLAN-Stärke", unit: "dBm", color: "#6f42c1", decimals: 0 },
 ];
 let vitalsData = null;
+const TASTER_COLORS = ["#0d6efd", "#dc3545", "#198754", "#fd7e14", "#6f42c1", "#0dcaf0", "#d63384", "#795548", "#6c757d", "#20c997"];
 
-async function refreshVitals(rebuildList) {
-  const sel = byId("vitalsTaster");
-  if (rebuildList || !sel.options.length) {
-    const list = (await apiGet("/api/taster")).tasters || [];
-    const old = sel.value;
-    sel.innerHTML = list.map(t =>
-      `<option value="${escapeHtml(t.mac)}">Taster ${escapeHtml(t.letter || "?")} · ${escapeHtml(t.name || t.mac)}</option>`).join("");
-    if (old && list.some(t => t.mac === old)) sel.value = old;
-  }
-  if (!sel.value) { byId("vitalsInfo").textContent = "Noch kein Taster angemeldet."; byId("vitalsCharts").innerHTML = ""; vitalsData = null; return; }
+async function refreshVitals() {
+  const list = ((await apiGet("/api/taster")).tasters || [])
+    .slice().sort((a, b) => String(a.letter || "~").localeCompare(String(b.letter || "~")));
   const hours = byId("vitalsHours").value;
-  vitalsData = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(sel.value)}&hours=${hours}`);
-  vitalsData.hours = Number(hours);
+  const series = await Promise.all(list.map(async (t, i) => {
+    const d = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(t.mac)}&hours=${hours}`).catch(() => ({ points: [] }));
+    return { label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
+  }));
+  vitalsData = { hours: Number(hours), series };
   drawVitals();
 }
 
 function drawVitals() {
   const box = byId("vitalsCharts");
-  const pts = vitalsData.points;
-  byId("vitalsInfo").textContent = pts.length ? `${pts.length} Messpunkte` : "Noch keine Messwerte.";
+  const s = vitalsData.series;
+  byId("vitalsInfo").innerHTML = s.length
+    ? s.map(x => `<span class="me-3"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${x.color};vertical-align:-1px"></span> ${escapeHtml(x.label)}</span>`).join("")
+    : "Noch kein Taster angemeldet.";
   if (!box.children.length) {
     box.innerHTML = VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
-      <div class="d-flex justify-content-between small"><strong>${c.title}</strong><span class="text-muted" id="vc-last-${c.idx}">–</span></div>
-      <canvas id="vc-${c.idx}" style="width:100%;height:160px"></canvas></div></div></div>`).join("");
+      <strong class="small">${c.title} (${c.unit})</strong>
+      <canvas id="vc-${c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("");
   }
-  VITAL_CHARTS.forEach(c => drawVitalChart(c, pts));
+  VITAL_CHARTS.forEach(c => drawVitalChart(c, s));
 }
 
-function drawVitalChart(c, pts) {
+function drawVitalChart(c, series) {
   const cv = byId("vc-" + c.idx);
   const dpr = window.devicePixelRatio || 1;
   const w = cv.clientWidth, h = cv.clientHeight;
@@ -72,14 +71,13 @@ function drawVitalChart(c, pts) {
   const g = cv.getContext("2d");
   g.scale(dpr, dpr);
   g.clearRect(0, 0, w, h);
-  const data = pts.filter(p => p[c.idx] !== null).map(p => [p[0], p[c.idx]]);
-  const lastEl = byId("vc-last-" + c.idx);
-  if (!data.length) { lastEl.textContent = "–"; g.fillStyle = "#888"; g.fillText("keine Daten", 10, 20); return; }
+  const lines = series.map(s => ({ color: s.color, data: s.points.filter(p => p[c.idx] !== null).map(p => [p[0], p[c.idx]]) }));
+  const all = lines.flatMap(l => l.data.map(d => d[1]));
+  if (!all.length) { g.fillStyle = "#888"; g.font = "12px sans-serif"; g.fillText("keine Daten", 10, 20); return; }
   const dec = c.decimals ?? 0;
-  lastEl.textContent = `${data[data.length - 1][1].toFixed(dec)} ${c.unit}`;
   const t1 = Date.now(), t0 = t1 - vitalsData.hours * 3600 * 1000;
-  let lo = c.min ?? Math.min(...data.map(d => d[1]));
-  let hi = c.max ?? Math.max(...data.map(d => d[1]));
+  let lo = c.min ?? Math.min(...all);
+  let hi = c.max ?? Math.max(...all);
   if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
   if (c.min === undefined) { const pad = (hi - lo) * 0.1; lo -= pad; hi += pad; }
   const L = 42, R = 8, T = 8, B = 20;
@@ -96,14 +94,17 @@ function drawVitalChart(c, pts) {
     const t = t0 + (t1 - t0) * i / 3;
     g.fillText(new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), x(t), h - 5);
   }
-  g.strokeStyle = c.color; g.lineWidth = 1.6; g.beginPath();
-  let prev = null;
-  data.forEach(([t, v]) => {
-    // Luecke ueber 2 Minuten (Taster aus): Linie unterbrechen
-    if (prev === null || t - prev > 120000) g.moveTo(x(t), y(v)); else g.lineTo(x(t), y(v));
-    prev = t;
+  g.lineWidth = 1.6;
+  lines.forEach(l => {
+    g.strokeStyle = l.color; g.beginPath();
+    let prev = null;
+    l.data.forEach(([t, v]) => {
+      // Luecke ueber 2 Minuten (Taster aus): Linie unterbrechen
+      if (prev === null || t - prev > 120000) g.moveTo(x(t), y(v)); else g.lineTo(x(t), y(v));
+      prev = t;
+    });
+    g.stroke();
   });
-  g.stroke();
 }
 
 // -----------------------------
@@ -1010,8 +1011,7 @@ async function init() {
   byId("btnWifiForce").addEventListener("click", forceWifi);
   byId("btnAccountSave").addEventListener("click", saveAccount);
   byId("btnLogout").addEventListener("click", logout);
-  byId("vitals-tab").addEventListener("shown.bs.tab", () => refreshVitals(true).catch(() => {}));
-  byId("vitalsTaster").addEventListener("change", () => refreshVitals().catch(() => {}));
+  byId("vitals-tab").addEventListener("shown.bs.tab", () => refreshVitals().catch(() => {}));
   byId("vitalsHours").addEventListener("change", () => refreshVitals().catch(() => {}));
   window.addEventListener("resize", () => { if (vitalsData) drawVitals(); });
   setInterval(() => {
