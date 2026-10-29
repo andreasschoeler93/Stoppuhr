@@ -16,6 +16,15 @@ if [ "$peer_role" = "master" ] && [ "$my_role" = "master" ] && ! ip -4 addr show
   exit 1
 fi
 
+if [ "$my_role" = "slave" ] && [ "$peer_role" = "slave" ]; then
+  # Beide sind Kopie (gegenseitig verbunden): der Koffer-Pi wird Hauptbestand, sonst kommt keiner weiter
+  if [ "$ROLLE" = "koffer" ]; then
+    redis-cli replicaof no one >/dev/null
+    exit 0
+  fi
+  exit 1
+fi
+
 if [ "$my_role" = "slave" ] && [ -n "$peer_role" ]; then
   link=$(info | awk -F: '/^master_link_status:/{print $2}')
   [ "$link" = "up" ] && exit 0
