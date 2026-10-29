@@ -120,7 +120,11 @@ sudo systemctl restart chrony
 
 echo "== Namen und DHCP: http://$NAME:1999 fuehrt immer zum arbeitenden Pi =="
 sudo apt-get install -y dnsmasq
-if [ "$ROLLE" = "koffer" ]; then DHCP_VON=100; DHCP_BIS=149; else DHCP_VON=150; DHCP_BIS=199; fi
+# Altlast aus dem Einzelbetrieb: bindet an wlan0, das jetzt in der Bridge steckt
+if [ -f /etc/dnsmasq.d/taster.conf ]; then
+  sudo mkdir -p /root/dnsmasq-alt
+  sudo mv /etc/dnsmasq.d/taster.conf /root/dnsmasq-alt/
+fiif [ "$ROLLE" = "koffer" ]; then DHCP_VON=100; DHCP_BIS=149; else DHCP_VON=150; DHCP_BIS=199; fi
 sudo tee /etc/dnsmasq.d/stoppuhr.conf >/dev/null <<EOF
 interface=br0
 bind-interfaces
