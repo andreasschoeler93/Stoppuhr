@@ -75,11 +75,11 @@ function drawVitals() {
     ? s.map(x => `<span class="me-3"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${x.color};vertical-align:-1px"></span> ${escapeHtml(x.label)}</span>`).join("")
     : "Noch kein Taster angemeldet.";
   if (!box.children.length) {
-    box.innerHTML = `<div class="col-lg-6"><div class="card h-100"><div class="card-body p-2">
-      <strong class="small">Zustand der Taster</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>` +
-      VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
+    box.innerHTML = VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
       <strong class="small">${c.title} (${c.unit})</strong>
-      <canvas id="vc-${c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("");
+      <canvas id="vc-${c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("") +
+      `<div class="col-lg-6"><div class="card h-100"><div class="card-body p-2">
+      <strong class="small">Zustand der Taster</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>`;
   }
   byId("vitalsStatus").innerHTML = vitalsStatusHtml();
   VITAL_CHARTS.forEach(c => drawVitalChart(c, s));
