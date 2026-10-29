@@ -6,9 +6,13 @@ Nicht für den ersten Wettkampf gedacht – der läuft mit v0.5.1 / v0.9.1. Dies
 
 ```
 Taster ohne Rolle ──Koffer-WLAN──► Koffer-Pi ──┐
-                                               ├── LAN-Kabel (Bridge br0, 192.168.50.0/24)
-Taster mit Rolle  ──Bad-WLAN────► Bad-Pi ──────┘
+                                               ├── VXLAN-Tunnel (Bridge br0, 192.168.50.0/24)
+Taster mit Rolle  ──Bad-WLAN────► Bad-Pi ──────┘        durch das Router-Netz
+
+PC ── Router/Internet ── eth0 beider Pis (DHCP, Name stoppuhr-koffer.local / stoppuhr-bad.local)
 ```
+
+Das Taster-Netz ist abgeschottet: `eth0` hängt per DHCP am Router und gehört **nicht** zur Bridge. Der Tunnel `vxlan0` (Multicast `239.50.50.50`, bei Bedarf `VXLAN_REMOTE=<IP des anderen Pi>`) verbindet nur die beiden Taster-WLANs. Es gibt keine Weiterleitung ins Internet.
 
 | Was | Adresse |
 |---|---|
@@ -37,7 +41,8 @@ Taster ohne Rolle sind im Koffer-WLAN. Mit Rollenzuweisung wechseln sie sofort i
 
 ```bash
 sudo nmcli con add type bridge ifname br0 con-name br0 ipv4.method manual ipv4.addresses 192.168.50.11/24 bridge.stp no
-sudo nmcli con add type bridge-slave ifname eth0 master br0
+sudo nmcli con add type vxlan ifname vxlan0 con-name vxlan0 vxlan.id 50 vxlan.remote 239.50.50.50 \
+  vxlan.parent eth0 vxlan.destination-port 4789 connection.master br0 connection.slave-type bridge
 sudo nmcli con add type wifi ifname wlan0 con-name ap ssid KOFFER-SSID mode ap wifi.hidden yes \
   wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'PASSWORT' connection.master br0 connection.slave-type bridge
 sudo nmcli con up br0
@@ -47,7 +52,7 @@ sudo nmcli con up br0
    damit auch bei Ausfall eines Pi Adressen vergeben werden. Beide antworten auf den Namen **`stoppuhr`** mit der gemeinsamen Adresse
    (anderer Name: `NAME=...`). Im Browser genügt dann `http://stoppuhr:1999`, es kommt immer die Oberfläche des arbeitenden Pi.
    Das gilt für Geräte in einem der beiden WLANs (sie nutzen den Pi als DNS-Server). Sonst `http://192.168.50.10:1999`.
-   Hostnamen der Pis bitte unterschiedlich lassen (z. B. `koffer-pi`, `bad-pi`), der Name `stoppuhr` gehört der gemeinsamen Adresse.
+   Das Skript setzt die Hostnamen `stoppuhr-koffer` bzw. `stoppuhr-bad` (per Avahi als `<name>.local` im Router-Netz erreichbar); der Name `stoppuhr` gehört der gemeinsamen Adresse.
 4. Zwei-Pi-Dienste: `bash deploy/zwei-pi/install-zwei-pi.sh koffer` bzw. `... bad`. Abweichende Adressen über `VIP=`, `KOFFER_IP=`, `BAD_IP=`.
    Der normale Dienst `stoppuhr` wird dabei abgeschaltet; keepalived startet ihn nur auf dem arbeitenden Pi.
 

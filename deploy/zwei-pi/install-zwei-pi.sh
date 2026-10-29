@@ -20,7 +20,7 @@ esac
 AP_SSID="${AP_SSID:-}"
 AP_PSK="${AP_PSK:-}"
 
-if ! ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP"; then
+if ! { ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP" && nmcli -t -f NAME con show | grep -qx vxlan0; }; then
   if [ -z "$AP_SSID" ] || [ -z "$AP_PSK" ]; then
     echo "br0 mit $OWN_IP fehlt. Entweder Bridge selbst einrichten (README) oder neu starten mit:"
     echo "  AP_SSID=NAME AP_PSK=PASSWORT bash $0 $ROLLE"
@@ -38,14 +38,24 @@ if ! ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP"; then
     echo "Bitte per Kabel/Monitor ausfuehren (oder FORCE=1 setzen)."
     exit 1
   fi
-  echo "== Netz: Bridge br0 ($OWN_IP) und WLAN-Zugangspunkt $AP_SSID =="
-  ALT="$(nmcli -t -f NAME,DEVICE con show --active | awk -F: '$2=="eth0"{print $1; exit}')"
-  sudo nmcli con delete br0 br0-eth0 ap >/dev/null 2>&1 || true
+  echo "== Netz: eth0 per DHCP am Router, Taster-Netz br0 ($OWN_IP) nur WLAN + Tunnel =="
+  # Altlast aus frueheren Staenden: eth0 war direkt in der Bridge
+  sudo nmcli con delete br0-eth0 >/dev/null 2>&1 || true
+  if ! nmcli -t -f TYPE con show | grep -q '^802-3-ethernet$'; then
+    sudo nmcli con add type ethernet ifname eth0 con-name lan ipv4.method auto
+  fi
+  LAN="$(nmcli -t -f NAME,TYPE con show | awk -F: '$2=="802-3-ethernet"{print $1; exit}')"
+  sudo nmcli con up "$LAN" || true
+  sudo nmcli con delete br0 vxlan0 ap >/dev/null 2>&1 || true
   sudo nmcli con add type bridge ifname br0 con-name br0 ipv4.method manual ipv4.addresses "$OWN_IP/24" bridge.stp no
-  sudo nmcli con add type bridge-slave ifname eth0 con-name br0-eth0 master br0
+  # Tunnel zwischen den beiden Pis ueber das Router-Netz: verbindet nur die beiden Taster-WLANs
+  # (Standard: Multicast-Gruppe; VXLAN_REMOTE=<IP des anderen Pi> nutzt stattdessen Unicast)
+  sudo nmcli con add type vxlan ifname vxlan0 con-name vxlan0 vxlan.id 50 \
+    vxlan.remote "${VXLAN_REMOTE:-239.50.50.50}" vxlan.parent eth0 vxlan.destination-port 4789 \
+    connection.master br0 connection.slave-type bridge
   sudo nmcli con add type wifi ifname wlan0 con-name ap ssid "$AP_SSID" mode ap wifi.hidden yes \
     wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$AP_PSK" connection.master br0 connection.slave-type bridge
-  if ! { sudo nmcli con up br0 && sudo nmcli con up br0-eth0 && sudo nmcli con up ap; }; then
+  if ! { sudo nmcli con up br0 && sudo nmcli con up vxlan0 && sudo nmcli con up ap; }; then
     sleep 3
   fi
   OK=0
@@ -54,12 +64,17 @@ if ! ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP"; then
     sleep 1
   done
   if [ "$OK" != "1" ]; then
-    echo "Bridge kam nicht hoch. Alter Zustand wird wiederhergestellt."
-    sudo nmcli con delete ap br0-eth0 br0 >/dev/null 2>&1 || true
-    [ -n "$ALT" ] && sudo nmcli con up "$ALT" || true
+    echo "Bridge kam nicht hoch. Taster-Netz wird entfernt, eth0 bleibt am Router."
+    sudo nmcli con delete ap vxlan0 br0 >/dev/null 2>&1 || true
     exit 1
   fi
 fi
+
+echo "== Name im Router-Netz: stoppuhr-$ROLLE.local =="
+sudo apt-get install -y avahi-daemon
+sudo hostnamectl set-hostname "stoppuhr-$ROLLE"
+sudo systemctl enable --now avahi-daemon
+sudo systemctl restart avahi-daemon
 
 echo "== Pakete =="
 sudo apt-get install -y keepalived redis-tools

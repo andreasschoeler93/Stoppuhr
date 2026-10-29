@@ -11,7 +11,7 @@ Die Oberfläche erreichst du danach unter `http://stoppuhr:1999` (oder `http://1
 |---|---|---|
 | Rolle (Argument des Skripts) | `koffer` | `bad` |
 | Hostname | `koffer-pi` | `bad-pi` |
-| Feste Adresse (Kabel und WLAN-Bridge) | 192.168.50.11 | 192.168.50.12 |
+| Feste Adresse (Taster-Netz) | 192.168.50.11 | 192.168.50.12 |
 | Eigenes WLAN (versteckt, WPA2) | Koffer-WLAN | Bad-WLAN |
 | DHCP-Bereich | .100–.149 | .150–.199 |
 | Normalerweise | arbeitet | Kopie, Notbetrieb |
@@ -54,9 +54,11 @@ Eine bestimmte Version statt `main`: `git fetch --tags && git checkout v0.8.0` (
 
 ## 4. Zwei-Pi-Betrieb einrichten
 
-Führe diesen Schritt **per Kabel (SSH über `eth0`) oder am Monitor** aus. Das Skript baut das Netz um und bricht ab,
-wenn deine Sitzung über das WLAN läuft. Nach dem Umbau ist der Pi im Heimnetz nicht mehr erreichbar, sondern nur noch unter seiner festen Adresse
-(192.168.50.11 bzw. .12). Stelle deinen PC dazu auf eine feste Adresse im Netz 192.168.50.x (z. B. 192.168.50.50/24) und hänge ihn ans selbe Kabelnetz.
+Führe diesen Schritt **per SSH über das Kabel (`eth0`) oder am Monitor** aus. Das Skript bricht ab, wenn deine Sitzung über das WLAN läuft.
+`eth0` bleibt am Router (DHCP), die SSH-Sitzung reißt also nicht ab. Beide Pis müssen dazu im Router-Netz hängen.
+Dein PC bleibt unverändert im Heimnetz mit Internet, eine feste IP ist nicht nötig. Nach dem Skript erreichst du die Pis als
+`ssh stoppuhr@stoppuhr-koffer.local` bzw. `stoppuhr-bad.local` und die Oberfläche als `http://stoppuhr-koffer.local:1999`.
+Die Taster-WLANs sind davon getrennt und haben kein Internet.
 
 ### 4a. Koffer-Pi
 
@@ -76,7 +78,8 @@ AP_SSID='Bad-WLAN-Name' AP_PSK='Bad-Kennwort' bash deploy/zwei-pi/install-zwei-p
 
 Das Skript erledigt:
 
-- Bridge `br0` mit fester Adresse, Kabel (`eth0`) und versteckter WLAN-Zugangspunkt (`ap`) darin. Kommt die Bridge nicht hoch, stellt es den alten Zustand wieder her.
+- Bridge `br0` mit fester Adresse, versteckter WLAN-Zugangspunkt (`ap`) und VXLAN-Tunnel `vxlan0` zum anderen Pi (über `eth0`, nur Taster-Verkehr). `eth0` selbst bleibt per DHCP am Router. Kommt die Bridge nicht hoch, wird das Taster-Netz wieder entfernt.
+- Hostname `stoppuhr-koffer` bzw. `stoppuhr-bad` und Avahi (`.local`-Namen im Router-Netz)
 - Redis im internen Netz erreichbar; der Bad-Pi wird Kopie (`replicaof 192.168.50.11`)
 - Rolle in `/etc/stoppuhr-zwei-pi.env`
 - keepalived (Koffer-Pi Priorität 150, Bad-Pi 100) für die gemeinsame Adresse
@@ -93,7 +96,7 @@ Auf jedem Pi:
 ```bash
 cat /etc/stoppuhr-zwei-pi.env            # ROLLE=koffer bzw. bad
 ip -4 addr show br0                      # Koffer-Pi: .11 (und .10, wenn er arbeitet); Bad-Pi: .12
-nmcli -f NAME,DEVICE con show --active   # br0, br0-eth0, ap
+nmcli -f NAME,DEVICE con show --active   # br0, vxlan0, ap, dazu die LAN-Verbindung (eth0)
 systemctl is-active stoppuhr-knoten keepalived dnsmasq redis-server
 redis-cli info replication | head -5     # Koffer: role:master, Bad: role:slave und master_link_status:up
 ```
@@ -145,9 +148,9 @@ sudo systemctl restart stoppuhr        # beim Bad-Pi startet keepalived den Dien
 |---|---|
 | `install.sh`: Permission denied bei `.venv` | Ordner gehört `root`: `sudo chown -R stoppuhr:stoppuhr ~/apps/stoppuhr` |
 | Installer: „Du bist per WLAN verbunden“ | Per Kabel oder Monitor ausführen |
-| Pi nach dem Umbau nicht erreichbar | PC auf 192.168.50.x stellen und per Kabel auf .11 bzw. .12 verbinden. Notfalls mit Monitor: `sudo nmcli con delete ap br0-eth0 br0` und `sudo nmcli con up "Wired connection 1"` |
+| Pi nach dem Umbau nicht erreichbar | `ping stoppuhr-koffer.local` bzw. IP in der Router-Liste suchen. Notfalls mit Monitor: `sudo nmcli con delete ap vxlan0 br0 br0-eth0` und `sudo nmcli con up "Wired connection 1"` |
 | Redis startet nicht | `journalctl -xeu redis-server`; neueste Version des Skripts holen (`git pull`) |
-| Bad-Pi: `master_link_status:down` | Kabel prüfen, `ping 192.168.50.11`, `redis-cli -h 192.168.50.11 ping` |
+| Bad-Pi: `master_link_status:down` | Beide Pis im selben Router-Netz? `ping 192.168.50.11` (läuft über den Tunnel). Hilft nichts: Multicast geht nicht durch den Router, dann `VXLAN_REMOTE=<LAN-IP des anderen Pi>` beim Skriptaufruf setzen (beide Pis, Router-Adresse reservieren) |
 | Beide Pis „arbeiten“ | Kabel nicht verbunden. Nach dem Anstecken gewinnt der Koffer-Pi |
 | Name `stoppuhr` löst nicht auf | Das Gerät nutzt nicht das Pi-WLAN als DNS. `http://192.168.50.10:1999` verwenden |
 | Kennwort der Oberfläche vergessen | Auf dem Koffer-Pi `redis-cli del AUTH`, dann neu festlegen |
