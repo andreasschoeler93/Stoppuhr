@@ -10,6 +10,8 @@ KEEP_HOURS: Final[int] = 6
 # Die Taster melden alle 10 s; etwas Reserve fuer schnellere Meldungen
 MAX_POINTS: Final[int] = KEEP_HOURS * 360 + 60
 FIELDS: Final[tuple[str, ...]] = ("battery", "vbat", "temp", "humidity", "rssi")
+PI_PREFIX: Final[str] = "PI_HIST:"
+PI_FIELDS: Final[tuple[str, ...]] = ("cpu_temp", "cpu_percent", "mem_percent")
 
 
 def _num(value: Any) -> float | None:
@@ -43,6 +45,35 @@ def history(r: Any, mac: str, since_ms: int = 0) -> list[list[Any]]:
         except ValueError:
             continue
         if isinstance(p, list) and len(p) == len(FIELDS) + 1 and p[0] >= since_ms:
+            points.append(p)
+    return points
+
+
+def add_pi(r: Any, name: str, ts_ms: int, node: dict[str, Any]) -> None:
+    """Messpunkt eines Pi (CPU-Temperatur, CPU-Last, Arbeitsspeicher)."""
+    try:
+        point = [ts_ms] + [_num(node.get(f)) for f in PI_FIELDS]
+        key = PI_PREFIX + name
+        pipe = r.pipeline()
+        pipe.rpush(key, json.dumps(point, separators=(",", ":")))
+        pipe.ltrim(key, -MAX_POINTS, -1)
+        pipe.execute()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def history_pi(r: Any, name: str, since_ms: int = 0) -> list[list[Any]]:
+    try:
+        raw = r.lrange(PI_PREFIX + name, 0, -1)
+    except Exception:  # noqa: BLE001
+        return []
+    points: list[list[Any]] = []
+    for item in raw:
+        try:
+            p = json.loads(item)
+        except ValueError:
+            continue
+        if isinstance(p, list) and len(p) == len(PI_FIELDS) + 1 and p[0] >= since_ms:
             points.append(p)
     return points
 

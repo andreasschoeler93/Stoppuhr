@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.11.0 | 2026-10-29 | Vitaldaten: Die Pis erscheinen im Vitaldaten-Tab. Neue Diagramme „Pi CPU-Temperatur“ und „Pi CPU-Last“ (je Pi eine Linie, Verlauf wie bei den Tastern), und die Box „Zustand der Taster und Pis“ zeigt zusätzlich Status, CPU, Speicher, SD-Karte und Laufzeit beider Pis. Neu: `/api/vitals/pi`. |
 | v0.10.1 | 2026-10-29 | Vitaldaten: Box „Zustand der Taster“ steht unten rechts (hinter den fünf Diagrammen). |
 | v0.10.0 | 2026-10-29 | Vitaldaten: Box „Zustand der Taster“ (Tabelle: Taster nebeneinander nach Buchstabe, darunter Status online/offline und aktuelle Werte). `/api/taster` liefert zusätzlich die Vitaldaten. |
 | v0.9.9 | 2026-10-29 | Ausfallübernahme: Nach getrenntem Kabel behält der Pi mit den neueren Daten seinen Bestand, der andere gleicht sich daran an. Vorher überschrieb der zurückkehrende Koffer-Pi die Läufe des Bad-Pi. |

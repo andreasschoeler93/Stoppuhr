@@ -46,6 +46,14 @@ class VitalsHistoryTest(unittest.TestCase):
         self.assertEqual(vitals_history.starts(r, 1500), [[2000, "5/2"]])
         self.assertEqual(len(vitals_history.starts(r)), 2)
 
+    def test_pi_history(self):
+        r = FakeRedis()
+        vitals_history.add_pi(r, "Koffer-Pi", 1000, {"cpu_temp": 55.0, "cpu_percent": 12, "mem_percent": 30})
+        vitals_history.add_pi(r, "Koffer-Pi", 2000, {"cpu_temp": None})
+        self.assertEqual(vitals_history.history_pi(r, "Koffer-Pi", 1500), [[2000, None, None, None]])
+        self.assertEqual(len(vitals_history.history_pi(r, "Koffer-Pi")), 2)
+        self.assertEqual(vitals_history.history_pi(r, "Bad-Pi"), [])
+
     def test_errors_ignored(self):
         vitals_history.add(object(), "AA", 1, {})
         self.assertEqual(vitals_history.history(object(), "AA"), [])

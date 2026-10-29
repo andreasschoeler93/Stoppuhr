@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.10.1
+# Version: v0.11.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -35,7 +35,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.10.1"
+APP_VERSION: Final[str] = "0.11.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -764,6 +764,44 @@ def api_vitals_history():
     return jsonify({"mac": mac, "fields": list(vitals_history.FIELDS),
                     "points": vitals_history.history(redis_store, mac, since),
                     "starts": vitals_history.starts(redis_store, since)})
+
+
+@app.get("/api/vitals/pi")
+def api_vitals_pi():
+    """Aktueller Zustand und Verlauf der Pis: [ts, CPU-Temperatur, CPU-Last %, Speicher %]."""
+    hours = min(max(request.args.get("hours", default=KEEP_HOURS_DEFAULT, type=float), 0.1), vitals_history.KEEP_HOURS)
+    since = now_ms() - int(hours * 3600 * 1000)
+    data = node_info.cluster_status()
+    nodes = []
+    for n in [data["self"]] + ([data["peer"]] if data["peer"].get("configured") else []):
+        name = _pi_name(n)
+        nodes.append({
+            "name": name, "reachable": bool(n.get("reachable")), "active": bool(n.get("has_vip")),
+            "cpu_temp": n.get("cpu_temp"), "cpu_percent": n.get("cpu_percent"),
+            "mem_percent": n.get("mem_percent"), "disk_percent": n.get("disk_percent"),
+            "uptime_s": n.get("uptime_s"),
+            "points": vitals_history.history_pi(redis_store, name, since),
+        })
+    return jsonify({"fields": list(vitals_history.PI_FIELDS), "nodes": nodes,
+                    "starts": vitals_history.starts(redis_store, since)})
+
+
+def _pi_name(node: dict[str, Any]) -> str:
+    kind = node.get("kind") or ""
+    return {"koffer": "Koffer-Pi", "bad": "Bad-Pi"}.get(kind, "Pi")
+
+
+def _record_pi_vitals() -> None:
+    """Zeichnet alle 10 s die Werte beider Pis auf; Fehler hier duerfen nie stoeren."""
+    while True:
+        time.sleep(10)
+        try:
+            data = node_info.cluster_status()
+            ts = now_ms()
+            for n in [data["self"]] + ([data["peer"]] if data["peer"].get("reachable") else []):
+                vitals_history.add_pi(redis_store, _pi_name(n), ts, n)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @app.get("/api/taster")
@@ -1892,6 +1930,7 @@ def sort_lane_times_by_lane(presses_by_lane: dict[str, PressEvent]) -> dict[str,
 
 def main():
     port = int(os.environ.get("PORT", str(DEFAULT_PORT)))
+    threading.Thread(target=_record_pi_vitals, daemon=True).start()
     app.run(host="0.0.0.0", port=port)
 
 

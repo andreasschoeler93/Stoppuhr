@@ -33,6 +33,12 @@ const VITAL_CHARTS = [
   { idx: 4, title: "Luftfeuchte", unit: "%", color: "#0dcaf0", decimals: 0 },
   { idx: 5, title: "WLAN-Stärke", unit: "dBm", color: "#6f42c1", decimals: 0 },
 ];
+// Pi-Diagramme: idx zeigt auf die Spalte im Pi-Messpunkt [ts, CPU-Temperatur, CPU-Last, Speicher]
+const PI_CHARTS = [
+  { id: "pi1", idx: 1, title: "Pi CPU-Temperatur", unit: "°C", pi: true, decimals: 1 },
+  { id: "pi2", idx: 2, title: "Pi CPU-Last", unit: "%", pi: true, min: 0, max: 100 },
+];
+const PI_COLORS = { "Koffer-Pi": "#0d6efd", "Bad-Pi": "#fd7e14", "Pi": "#0d6efd" };
 let vitalsData = null;
 const TASTER_COLORS = ["#0d6efd", "#dc3545", "#198754", "#fd7e14", "#6f42c1", "#0dcaf0", "#d63384", "#795548", "#6c757d", "#20c997"];
 
@@ -46,8 +52,32 @@ async function refreshVitals() {
     if (d.starts && d.starts.length) starts = d.starts;
     return { label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
   }));
-  vitalsData = { hours: Number(hours), series, starts: starts || [], tasters: list };
+  const pi = await apiGet(`/api/vitals/pi?hours=${hours}`).catch(() => ({ nodes: [] }));
+  if (!starts.length && pi.starts) starts = pi.starts;
+  const piNodes = pi.nodes || [];
+  const piSeries = piNodes.map(n => ({ label: n.name, color: PI_COLORS[n.name] || "#0d6efd", points: n.points || [] }));
+  vitalsData = { hours: Number(hours), series, starts: starts || [], tasters: list, piNodes, piSeries };
   drawVitals();
+}
+
+function piStatusHtml() {
+  const nodes = vitalsData.piNodes || [];
+  if (!nodes.length) return "";
+  const num = (v, dec, unit) => (v === null || v === undefined) ? "–" : `${Number(v).toFixed(dec)} ${unit}`;
+  const up = s => s === null || s === undefined ? "–" : (s >= 86400 ? `${Math.floor(s / 86400)} d ${Math.floor(s % 86400 / 3600)} h` : `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`);
+  const rows = [
+    ["Status", n => !n.reachable ? '<span class="badge text-bg-danger">nicht erreichbar</span>'
+      : (n.active ? '<span class="badge text-bg-success">arbeitet</span>' : '<span class="badge text-bg-secondary">Bereitschaft</span>')],
+    ["CPU-Temp.", n => num(n.cpu_temp, 1, "°C")],
+    ["CPU-Last", n => num(n.cpu_percent, 0, "%")],
+    ["Speicher", n => num(n.mem_percent, 0, "%")],
+    ["SD-Karte", n => num(n.disk_percent, 0, "%")],
+    ["Laufzeit", n => up(n.uptime_s)],
+  ];
+  const head = nodes.map(n => `<th class="text-center" style="color:${PI_COLORS[n.name] || "#0d6efd"}">${escapeHtml(n.name)}</th>`).join("");
+  const body = rows.map(([name, f]) => `<tr><th class="text-nowrap fw-normal">${name}</th>${
+    nodes.map(n => `<td class="text-center text-nowrap">${f(n)}</td>`).join("")}</tr>`).join("");
+  return `<div class="table-responsive mt-2"><table class="table table-sm align-middle mb-0"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function vitalsStatusHtml() {
@@ -71,22 +101,23 @@ function vitalsStatusHtml() {
 function drawVitals() {
   const box = byId("vitalsCharts");
   const s = vitalsData.series;
-  byId("vitalsInfo").innerHTML = s.length
-    ? s.map(x => `<span class="me-3"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${x.color};vertical-align:-1px"></span> ${escapeHtml(x.label)}</span>`).join("")
-    : "Noch kein Taster angemeldet.";
+  const legend = x => `<span class="me-3"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${x.color};vertical-align:-1px"></span> ${escapeHtml(x.label)}</span>`;
+  byId("vitalsInfo").innerHTML = (s.length ? s.map(legend).join("") : "Noch kein Taster angemeldet.")
+    + (vitalsData.piSeries.length ? ' <span class="text-muted me-2">|</span>' + vitalsData.piSeries.map(legend).join("") : "");
   if (!box.children.length) {
-    box.innerHTML = VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
+    box.innerHTML = VITAL_CHARTS.concat(PI_CHARTS).map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
       <strong class="small">${c.title} (${c.unit})</strong>
-      <canvas id="vc-${c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("") +
+      <canvas id="vc-${c.id || c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("") +
       `<div class="col-lg-6"><div class="card h-100"><div class="card-body p-2">
-      <strong class="small">Zustand der Taster</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>`;
+      <strong class="small">Zustand der Taster und Pis</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>`;
   }
-  byId("vitalsStatus").innerHTML = vitalsStatusHtml();
+  byId("vitalsStatus").innerHTML = vitalsStatusHtml() + piStatusHtml();
   VITAL_CHARTS.forEach(c => drawVitalChart(c, s));
+  PI_CHARTS.forEach(c => drawVitalChart(c, vitalsData.piSeries));
 }
 
 function drawVitalChart(c, series) {
-  const cv = byId("vc-" + c.idx);
+  const cv = byId("vc-" + (c.id || c.idx));
   const dpr = window.devicePixelRatio || 1;
   const w = cv.clientWidth, h = cv.clientHeight;
   if (!w) return;
