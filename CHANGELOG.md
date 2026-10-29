@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.9.5 | 2026-10-29 | Aktiver Pi wird erkannt, auch wenn die gemeinsame Adresse die zweite Adresse einer Schnittstelle ist („Aktiver Pi unbekannt“). Zwei-Pi-Skript entfernt die alte dnsmasq-Konfiguration des Einzelbetriebs. |
 | v0.9.4 | 2026-10-29 | Zwei-Pi-Netz: `eth0` bleibt per DHCP am Router (Namen `stoppuhr-koffer.local`/`stoppuhr-bad.local`), das Taster-Netz verbindet die Pis über einen VXLAN-Tunnel und ist vom Internet abgeschottet. |
 | v0.9.3 | 2026-10-29 | Vitaldaten: zusätzlich Zeitraum „letzte 15 Minuten“ und „letzte 30 Minuten“. |
 | v0.9.2 | 2026-10-29 | Vitaldaten: senkrechte gestrichelte Linien mit „L<Nr>“ bei jedem Laufstart (Redis `RUN_STARTS`, die letzten 200 Starts). |

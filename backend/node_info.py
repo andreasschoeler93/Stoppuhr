@@ -30,13 +30,14 @@ def _run(cmd: list[str]) -> str:
 
 
 def _ipv4_addresses() -> dict[str, str]:
+    """Alle IPv4-Adressen je Schnittstelle (mehrere, z. B. feste Adresse + VIP, kommagetrennt)."""
     out: dict[str, str] = {}
     for ifname, addrs in psutil.net_if_addrs().items():
         if ifname == "lo":
             continue
-        for a in addrs:
-            if a.family == socket.AF_INET:
-                out.setdefault(ifname, a.address)
+        found = [a.address for a in addrs if a.family == socket.AF_INET]
+        if found:
+            out[ifname] = ", ".join(found)
     return out
 
 
@@ -98,7 +99,7 @@ def collect() -> dict[str, Any]:
         "hostname": socket.gethostname(),
         "kind": os.environ.get("ROLLE", ""),  # koffer | bad | "" (Einzelbetrieb)
         "ips": addrs,
-        "has_vip": bool(vip) and vip in addrs.values(),
+        "has_vip": bool(vip) and any(vip in v.split(", ") for v in addrs.values()),
         "vip": vip,
         "wifi_ssid": _wifi_ssid(),
         "wifi_applied_ver": _wifi_applied(),
