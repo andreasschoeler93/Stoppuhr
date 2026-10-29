@@ -39,6 +39,13 @@ class VitalsHistoryTest(unittest.TestCase):
             vitals_history.add(r, "AA", i, {"battery": 1})
         self.assertEqual(len(r.lists[vitals_history.KEY_PREFIX + "AA"]), vitals_history.MAX_POINTS)
 
+    def test_starts(self):
+        r = FakeRedis()
+        vitals_history.add_start(r, 1000, "5")
+        vitals_history.add_start(r, 2000, "5/2")
+        self.assertEqual(vitals_history.starts(r, 1500), [[2000, "5/2"]])
+        self.assertEqual(len(vitals_history.starts(r)), 2)
+
     def test_errors_ignored(self):
         vitals_history.add(object(), "AA", 1, {})
         self.assertEqual(vitals_history.history(object(), "AA"), [])

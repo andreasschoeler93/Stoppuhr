@@ -22,6 +22,9 @@ class RepeatRunTests(unittest.TestCase):
         self.save_state.start()
         self.addCleanup(self.load_state.stop)
         self.addCleanup(self.save_state.stop)
+        no_starts = patch.object(stopwatch.vitals_history, "add_start")
+        no_starts.start()
+        self.addCleanup(no_starts.stop)
 
     def test_selecting_a_used_run_prepares_next_attempt_without_deleting_times(self):
         original = {

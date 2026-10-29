@@ -40,11 +40,13 @@ async function refreshVitals() {
   const list = ((await apiGet("/api/taster")).tasters || [])
     .slice().sort((a, b) => String(a.letter || "~").localeCompare(String(b.letter || "~")));
   const hours = byId("vitalsHours").value;
+  let starts = [];
   const series = await Promise.all(list.map(async (t, i) => {
     const d = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(t.mac)}&hours=${hours}`).catch(() => ({ points: [] }));
+    if (d.starts && d.starts.length) starts = d.starts;
     return { label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
   }));
-  vitalsData = { hours: Number(hours), series };
+  vitalsData = { hours: Number(hours), series, starts: starts || [] };
   drawVitals();
 }
 
@@ -94,6 +96,16 @@ function drawVitalChart(c, series) {
     const t = t0 + (t1 - t0) * i / 3;
     g.fillText(new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), x(t), h - 5);
   }
+  // Laufstarts als senkrechte gestrichelte Linien mit Beschriftung (Lauf-Nr.)
+  g.save();
+  g.setLineDash([4, 3]); g.strokeStyle = "#444"; g.fillStyle = "#444"; g.lineWidth = 1; g.textAlign = "left";
+  (vitalsData.starts || []).forEach(([t, key]) => {
+    if (t < t0 || t > t1) return;
+    const xx = x(t);
+    g.beginPath(); g.moveTo(xx, T); g.lineTo(xx, h - B); g.stroke();
+    g.fillText("L" + key, xx + 2, T + 9);
+  });
+  g.restore();
   g.lineWidth = 1.6;
   lines.forEach(l => {
     g.strokeStyle = l.color; g.beginPath();

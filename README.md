@@ -1,4 +1,4 @@
-# Stoppuhr – Pi-Software (v0.9.1)
+# Stoppuhr – Pi-Software (v0.9.2)
 
 Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
 liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
@@ -14,7 +14,7 @@ Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Zwei-Pi-Betrieb (Koffer und Bad):
 - Start, Stopp, automatisch nächster Lauf, Abbruch und Wiederholung eines Laufs
 - Taster tauschen über „Bereitschaft“, Systemstatus, Zwei-Pi-Betrieb mit Ausfallübernahme
 - Anmeldung für die Oberfläche, WLAN-Daten und Updates (Pi und Taster) aus der Oberfläche
-- Tab „Vitaldaten“ (ab v0.9.0): je ein Diagramm für Akku, Akkuspannung, Temperatur, Luftfeuchte und WLAN-Stärke mit allen Tastern in eigenen Farben (letzte 1/3/6 Stunden).
+- Tab „Vitaldaten“ (ab v0.9.0): je ein Diagramm für Akku, Akkuspannung, Temperatur, Luftfeuchte und WLAN-Stärke mit allen Tastern in eigenen Farben (letzte 1/3/6 Stunden). Senkrechte gestrichelte Linien „L<Nr>“ markieren jeden Laufstart.
   Die Werte kommen aus den ohnehin alle 10 s gesendeten Vitaldaten (kein Mehraufwand am Taster) und liegen in Redis (`VITALS_HIST:<MAC>`, höchstens 6 Stunden).
   Schnittstelle: `GET /api/vitals/history?mac=…&hours=…`.
 

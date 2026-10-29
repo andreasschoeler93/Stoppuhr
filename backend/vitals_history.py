@@ -5,6 +5,7 @@ import json
 from typing import Any, Final
 
 KEY_PREFIX: Final[str] = "VITALS_HIST:"
+STARTS_KEY: Final[str] = "RUN_STARTS"
 KEEP_HOURS: Final[int] = 6
 # Die Taster melden alle 10 s; etwas Reserve fuer schnellere Meldungen
 MAX_POINTS: Final[int] = KEEP_HOURS * 360 + 60
@@ -44,3 +45,30 @@ def history(r: Any, mac: str, since_ms: int = 0) -> list[list[Any]]:
         if isinstance(p, list) and len(p) == len(FIELDS) + 1 and p[0] >= since_ms:
             points.append(p)
     return points
+
+
+def add_start(r: Any, ts_ms: int, run_key: str) -> None:
+    """Merkt sich einen Laufstart (senkrechte Linie im Diagramm)."""
+    try:
+        pipe = r.pipeline()
+        pipe.rpush(STARTS_KEY, json.dumps([ts_ms, run_key], separators=(",", ":")))
+        pipe.ltrim(STARTS_KEY, -200, -1)
+        pipe.execute()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def starts(r: Any, since_ms: int = 0) -> list[list[Any]]:
+    try:
+        raw = r.lrange(STARTS_KEY, 0, -1)
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[list[Any]] = []
+    for item in raw:
+        try:
+            p = json.loads(item)
+        except ValueError:
+            continue
+        if isinstance(p, list) and len(p) == 2 and p[0] >= since_ms:
+            out.append(p)
+    return out

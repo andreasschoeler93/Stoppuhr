@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.9.1
+# Version: v0.9.2
 # Status: stable-beta
 # ----------------------------------------
 
@@ -35,7 +35,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.9.1"
+APP_VERSION: Final[str] = "0.9.2"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -762,7 +762,8 @@ def api_vitals_history():
     hours = min(max(request.args.get("hours", default=KEEP_HOURS_DEFAULT, type=float), 0.1), vitals_history.KEEP_HOURS)
     since = now_ms() - int(hours * 3600 * 1000)
     return jsonify({"mac": mac, "fields": list(vitals_history.FIELDS),
-                    "points": vitals_history.history(redis_store, mac, since)})
+                    "points": vitals_history.history(redis_store, mac, since),
+                    "starts": vitals_history.starts(redis_store, since)})
 
 
 @app.get("/api/taster")
@@ -1454,6 +1455,8 @@ def api_post_triggers():
     triggers_per_run[current_key][lane] = press
     st["triggers_per_run"] = triggers_per_run
     save_state(st)
+    if lane == STARTER_KEY:
+        vitals_history.add_start(redis_store, ts_val, current_key)
     # Check, if for all lanes presses have been received
     if lanes_in_run and not (set(lanes_in_run) - set(triggers_per_run[current_key].keys())):
         logger.info(f"All lanes have been pressed in run {current_key}")

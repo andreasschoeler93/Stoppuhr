@@ -21,6 +21,9 @@ class PendingSwapTests(unittest.TestCase):
             p = patch.object(stopwatch, name, side_effect=fn)
             p.start()
             self.addCleanup(p.stop)
+        no_starts = patch.object(stopwatch.vitals_history, "add_start")
+        no_starts.start()
+        self.addCleanup(no_starts.stop)
 
     def _assign(self, **extra):
         return self.client.post("/api/assign", json={"mac": "B", "lane": 1, **extra})
