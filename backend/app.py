@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.8.0
+# Version: v0.9.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -30,16 +30,18 @@ import auth
 import firmware_store
 import node_info
 import pi_update
+import vitals_history
 import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.8.0"
+APP_VERSION: Final[str] = "0.9.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
 CLOCK_OFFSET_MIN_MS: Final[int] = 250
+KEEP_HOURS_DEFAULT: Final[float] = 6.0
 HEATS_XML_PATH: Final[str] = os.environ.get("HEATS_XML_PATH", "/app/results/heats.xml")
 
 
@@ -749,7 +751,18 @@ def api_post_vitals():
         old = offsets.get(mac)
         offsets[mac] = new_off if old is None or new_off < old else int(old + (new_off - old) * 0.1)
     save_state(st)
+    vitals_history.add(redis_store, str(mac), new_vital["ts"], dict(new_vital))
     return jsonify({"ok": True, "vital": new_vital})
+
+
+@app.get("/api/vitals/history")
+def api_vitals_history():
+    """Messpunkte [ts, Akku %, Akku V, Temperatur, Feuchte, RSSI] der letzten Stunden."""
+    mac = request.args.get("mac", "")
+    hours = min(max(request.args.get("hours", default=KEEP_HOURS_DEFAULT, type=float), 0.1), vitals_history.KEEP_HOURS)
+    since = now_ms() - int(hours * 3600 * 1000)
+    return jsonify({"mac": mac, "fields": list(vitals_history.FIELDS),
+                    "points": vitals_history.history(redis_store, mac, since)})
 
 
 @app.get("/api/taster")

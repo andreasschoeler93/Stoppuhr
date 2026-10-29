@@ -41,6 +41,11 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
+      <button class="nav-link" id="vitals-tab" data-bs-toggle="tab" data-bs-target="#vitals" type="button" role="tab">
+        Vitaldaten
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
       <button class="nav-link" id="status-tab" data-bs-toggle="tab" data-bs-target="#status" type="button" role="tab">
         Systemstatus
       </button>
@@ -333,6 +338,21 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- TAB: Vitaldaten -->
+    <div class="tab-pane fade" id="vitals" role="tabpanel">
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <h2 class="h6 mb-0 me-2">Vitaldaten</h2>
+        <select class="form-select form-select-sm w-auto" id="vitalsTaster"></select>
+        <select class="form-select form-select-sm w-auto" id="vitalsHours">
+          <option value="1">letzte Stunde</option>
+          <option value="3">letzte 3 Stunden</option>
+          <option value="6" selected>letzte 6 Stunden</option>
+        </select>
+        <span class="text-muted small" id="vitalsInfo"></span>
+      </div>
+      <div class="row g-3" id="vitalsCharts"></div>
     </div>
 
     <!-- TAB: Systemstatus -->

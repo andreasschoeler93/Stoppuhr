@@ -24,6 +24,89 @@ let laneAssignments = {}; // lane -> {active, pending}
 let maxLane = 0;
 
 // -----------------------------
+// Vitaldaten-Diagramme (Canvas, ohne Bibliothek)
+// -----------------------------
+const VITAL_CHARTS = [
+  { idx: 1, title: "Akku", unit: "%", color: "#198754", min: 0, max: 100 },
+  { idx: 2, title: "Akkuspannung", unit: "V", color: "#0d6efd", decimals: 2 },
+  { idx: 3, title: "Temperatur", unit: "°C", color: "#dc3545", decimals: 1 },
+  { idx: 4, title: "Luftfeuchte", unit: "%", color: "#0dcaf0", decimals: 0 },
+  { idx: 5, title: "WLAN-Stärke", unit: "dBm", color: "#6f42c1", decimals: 0 },
+];
+let vitalsData = null;
+
+async function refreshVitals(rebuildList) {
+  const sel = byId("vitalsTaster");
+  if (rebuildList || !sel.options.length) {
+    const list = (await apiGet("/api/taster")).tasters || [];
+    const old = sel.value;
+    sel.innerHTML = list.map(t =>
+      `<option value="${escapeHtml(t.mac)}">Taster ${escapeHtml(t.letter || "?")} · ${escapeHtml(t.name || t.mac)}</option>`).join("");
+    if (old && list.some(t => t.mac === old)) sel.value = old;
+  }
+  if (!sel.value) { byId("vitalsInfo").textContent = "Noch kein Taster angemeldet."; byId("vitalsCharts").innerHTML = ""; vitalsData = null; return; }
+  const hours = byId("vitalsHours").value;
+  vitalsData = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(sel.value)}&hours=${hours}`);
+  vitalsData.hours = Number(hours);
+  drawVitals();
+}
+
+function drawVitals() {
+  const box = byId("vitalsCharts");
+  const pts = vitalsData.points;
+  byId("vitalsInfo").textContent = pts.length ? `${pts.length} Messpunkte` : "Noch keine Messwerte.";
+  if (!box.children.length) {
+    box.innerHTML = VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
+      <div class="d-flex justify-content-between small"><strong>${c.title}</strong><span class="text-muted" id="vc-last-${c.idx}">–</span></div>
+      <canvas id="vc-${c.idx}" style="width:100%;height:160px"></canvas></div></div></div>`).join("");
+  }
+  VITAL_CHARTS.forEach(c => drawVitalChart(c, pts));
+}
+
+function drawVitalChart(c, pts) {
+  const cv = byId("vc-" + c.idx);
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d");
+  g.scale(dpr, dpr);
+  g.clearRect(0, 0, w, h);
+  const data = pts.filter(p => p[c.idx] !== null).map(p => [p[0], p[c.idx]]);
+  const lastEl = byId("vc-last-" + c.idx);
+  if (!data.length) { lastEl.textContent = "–"; g.fillStyle = "#888"; g.fillText("keine Daten", 10, 20); return; }
+  const dec = c.decimals ?? 0;
+  lastEl.textContent = `${data[data.length - 1][1].toFixed(dec)} ${c.unit}`;
+  const t1 = Date.now(), t0 = t1 - vitalsData.hours * 3600 * 1000;
+  let lo = c.min ?? Math.min(...data.map(d => d[1]));
+  let hi = c.max ?? Math.max(...data.map(d => d[1]));
+  if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
+  if (c.min === undefined) { const pad = (hi - lo) * 0.1; lo -= pad; hi += pad; }
+  const L = 42, R = 8, T = 8, B = 20;
+  const x = t => L + (t - t0) / (t1 - t0) * (w - L - R);
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * (h - T - B);
+  g.font = "11px sans-serif"; g.strokeStyle = "#e5e5e5"; g.fillStyle = "#666"; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4, yy = y(v);
+    g.beginPath(); g.moveTo(L, yy); g.lineTo(w - R, yy); g.stroke();
+    g.textAlign = "right"; g.fillText(v.toFixed(dec), L - 4, yy + 4);
+  }
+  g.textAlign = "center";
+  for (let i = 0; i <= 3; i++) {
+    const t = t0 + (t1 - t0) * i / 3;
+    g.fillText(new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), x(t), h - 5);
+  }
+  g.strokeStyle = c.color; g.lineWidth = 1.6; g.beginPath();
+  let prev = null;
+  data.forEach(([t, v]) => {
+    // Luecke ueber 2 Minuten (Taster aus): Linie unterbrechen
+    if (prev === null || t - prev > 120000) g.moveTo(x(t), y(v)); else g.lineTo(x(t), y(v));
+    prev = t;
+  });
+  g.stroke();
+}
+
+// -----------------------------
 // Backend calls
 // -----------------------------
 async function apiGet(path) {
@@ -927,6 +1010,13 @@ async function init() {
   byId("btnWifiForce").addEventListener("click", forceWifi);
   byId("btnAccountSave").addEventListener("click", saveAccount);
   byId("btnLogout").addEventListener("click", logout);
+  byId("vitals-tab").addEventListener("shown.bs.tab", () => refreshVitals(true).catch(() => {}));
+  byId("vitalsTaster").addEventListener("change", () => refreshVitals().catch(() => {}));
+  byId("vitalsHours").addEventListener("change", () => refreshVitals().catch(() => {}));
+  window.addEventListener("resize", () => { if (vitalsData) drawVitals(); });
+  setInterval(() => {
+    if (byId("vitals").classList.contains("active")) refreshVitals().catch(() => {});
+  }, 10000);
   setInterval(() => {
     if (byId("settings").classList.contains("active")) {
       refreshFirmware().catch(() => {});

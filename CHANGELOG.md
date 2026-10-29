@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.9.0 | 2026-10-29 | Neuer Tab „Vitaldaten“: Diagramme für Akku, Akkuspannung, Temperatur, Luftfeuchte und WLAN-Stärke je Taster (letzte 6 Stunden, in Redis gespeichert). |
 | v0.8.0 | 2026-10-29 | Anmeldung (Benutzer und Kennwort) für die Oberfläche. WLAN-Namen und -Kennwörter in den Einstellungen ändern und an die Taster verteilen; danach stellen die Pis ihren Zugangspunkt um. Installer richtet Bridge und Zugangspunkt ein. |
 | v0.7.2 | 2026-10-28 | Gemeinsamer Name `stoppuhr` (dnsmasq) im Zwei-Pi-Betrieb, gleiche Software auf beiden Pis, Rolle in `/etc/stoppuhr-zwei-pi.env`. |
 | v0.7.1 | 2026-10-28 | Pi-Software per Dropdown auf eine Git-Version wechseln. |
