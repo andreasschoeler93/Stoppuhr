@@ -9,6 +9,7 @@ import pi_update
 class PiUpdateTests(unittest.TestCase):
     def setUp(self):
         self.state = stopwatch._default_state()
+        stopwatch.app.config["AUTH_DISABLED"] = True
         self.client = stopwatch.app.test_client()
         patches = [
             patch.object(stopwatch, "load_state", side_effect=lambda: copy.deepcopy(self.state)),

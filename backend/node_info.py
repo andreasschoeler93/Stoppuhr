@@ -52,6 +52,14 @@ def _wifi_ssid() -> Optional[str]:
     return None
 
 
+def _wifi_applied() -> int:
+    try:
+        with open(os.environ.get("WIFI_APPLIED_FILE", "/var/lib/stoppuhr-wlan-version")) as fh:
+            return int(fh.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
 def _cpu_temp() -> Optional[float]:
     try:
         with open("/sys/class/thermal/thermal_zone0/temp") as fh:
@@ -93,6 +101,7 @@ def collect() -> dict[str, Any]:
         "has_vip": bool(vip) and vip in addrs.values(),
         "vip": vip,
         "wifi_ssid": _wifi_ssid(),
+        "wifi_applied_ver": _wifi_applied(),
         "uptime_s": int(time.time() - psutil.boot_time()),
         "cpu_percent": psutil.cpu_percent(interval=None),
         "cpu_temp": _cpu_temp(),

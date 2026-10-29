@@ -228,6 +228,50 @@
         </div>
       </div>
 
+      <div class="card mb-3" id="wifiCard">
+        <div class="card-body">
+          <h2 class="h6 mb-2">WLAN-Netze</h2>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label" for="wifiSsid1">Koffer-WLAN (Name)</label>
+              <input class="form-control" id="wifiSsid1" maxlength="32" autocomplete="off">
+              <label class="form-label mt-2" for="wifiPsk1">Kennwort</label>
+              <input class="form-control" id="wifiPsk1" type="password" maxlength="63" autocomplete="new-password" placeholder="leer = unverändert">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="wifiSsid2">Bad-WLAN (Name)</label>
+              <input class="form-control" id="wifiSsid2" maxlength="32" autocomplete="off">
+              <label class="form-label mt-2" for="wifiPsk2">Kennwort</label>
+              <input class="form-control" id="wifiPsk2" type="password" maxlength="63" autocomplete="new-password" placeholder="leer = unverändert">
+            </div>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-primary btn-sm" id="btnWifiSave">Übernehmen</button>
+            <button class="btn btn-outline-secondary btn-sm d-none" id="btnWifiForce">Jetzt auch am Pi umstellen</button>
+          </div>
+          <div class="form-text">Zuerst holen sich die online Taster die neuen Daten und bestätigen sie. Danach stellt jeder Pi sein WLAN um (die Verbindung zur Oberfläche bricht dann kurz ab). Taster, die nicht online sind, behalten die alten Daten und finden das Netz danach nicht mehr (dann per USB neu flashen). Nie während eines laufenden Laufs.</div>
+          <div class="small mt-2" id="wifiStatus"></div>
+          <div class="text-danger small d-none" id="wifiError"></div>
+        </div>
+      </div>
+
+      <div class="card mb-3" id="accountCard">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Zugang zur Oberfläche</h2>
+          <div class="small mb-2">Angemeldet als <strong id="accountUser">–</strong></div>
+          <div class="row g-2">
+            <div class="col-md-4"><input class="form-control" id="accCurrent" type="password" placeholder="Aktuelles Kennwort" autocomplete="current-password"></div>
+            <div class="col-md-4"><input class="form-control" id="accUser" placeholder="Neuer Benutzername" maxlength="32" autocomplete="username"></div>
+            <div class="col-md-4"><input class="form-control" id="accPassword" type="password" placeholder="Neues Kennwort" autocomplete="new-password"></div>
+          </div>
+          <div class="d-flex gap-2 mt-2">
+            <button class="btn btn-primary btn-sm" id="btnAccountSave">Ändern</button>
+            <button class="btn btn-outline-secondary btn-sm" id="btnLogout">Abmelden</button>
+          </div>
+          <div class="text-danger small d-none" id="accountError"></div>
+        </div>
+      </div>
+
       <div class="card mb-3" id="piUpdateCard">
         <div class="card-body">
           <h2 class="h6 mb-2">Pi-Software</h2>

@@ -9,6 +9,7 @@ import node_info
 class ClusterStatusTests(unittest.TestCase):
     def setUp(self):
         self.state = stopwatch._default_state()
+        stopwatch.app.config["AUTH_DISABLED"] = True
         self.client = stopwatch.app.test_client()
         for name, fn in (
             ("load_state", lambda: copy.deepcopy(self.state)),

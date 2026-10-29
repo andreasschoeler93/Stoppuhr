@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.6.2
+# Version: v0.8.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -23,15 +23,18 @@ from typing import Any, Final, Optional, TypedDict
 
 import psutil
 import redis
-from flask import Flask, Response, abort, jsonify, render_template, request, send_file
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, session
+from flask.sessions import SecureCookieSessionInterface
 from flask.typing import ResponseReturnValue
+import auth
 import firmware_store
 import node_info
 import pi_update
+import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.7.2"
+APP_VERSION: Final[str] = "0.8.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -61,6 +64,7 @@ class Vital(TypedDict):
     fw: Optional[str]
     uptime_s: Optional[int]
     ssid: Optional[str]
+    wv: Optional[int]
 
 
 TASTER_LETTERS = "ABCDEFGHIJ"
@@ -248,6 +252,152 @@ def _prepare_attempt(st: State, run: int) -> int:
     st["start_locked_until_ms"] = now_ms() + _stop_lockout_ms(st)
     return attempt
 
+
+# ----------------------------------------
+# Anmeldung (Weboberflaeche). Die Schnittstellen der Taster und der Export fuer JAuswertung
+# bleiben offen, sonst koennten sich die Taster nicht mehr melden.
+# ----------------------------------------
+_OPEN_ROUTES: Final[frozenset[tuple[str, str]]] = frozenset({
+    ("GET", "/login"),
+    ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/setup"),
+    ("POST", "/api/auth/logout"),
+    ("GET", "/api/version"),
+    ("POST", "/api/taster"),
+    ("POST", "/api/vitals"),
+    ("POST", "/api/triggers"),
+    ("GET", "/api/display"),
+    ("POST", "/api/abort-run"),
+    ("GET", "/api/firmware/download"),
+    ("POST", "/api/ota-status"),
+    ("GET", "/heats.xml"),
+    ("GET", "/legacy/heats.xml"),
+})
+LOGIN_MAX_FAILS: Final[int] = 5
+LOGIN_WINDOW_S: Final[int] = 60
+_login_fails: dict[str, list[float]] = defaultdict(list)
+
+
+def _auth_active() -> bool:
+    return not app.config.get("AUTH_DISABLED")
+
+
+@app.before_request
+def _require_login() -> Optional[ResponseReturnValue]:
+    if not _auth_active():
+        return None
+    method = "GET" if request.method == "HEAD" else request.method
+    path = request.path
+    if path.startswith("/static/"):
+        return None
+    is_open = (method, path) in _OPEN_ROUTES
+    if is_open:
+        return None
+    try:
+        cred = auth.load(redis_store)
+    except redis.RedisError:
+        return jsonify({"ok": False, "error": "Redis nicht erreichbar"}), 503
+    if cred and session.get("u") == cred["user"] and session.get("f") == auth.fingerprint(cred):
+        return None
+    if path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "auth", "setup": cred is None}), 401
+    return redirect("/login")
+
+
+class _RedisKeySessions(SecureCookieSessionInterface):
+    """Sitzungs-Cookies mit dem Schluessel aus Redis (beide Pis teilen ihn)."""
+
+    def get_signing_serializer(self, app: Flask):
+        if not app.secret_key:
+            try:
+                app.secret_key = auth.secret(redis_store)
+            except redis.RedisError:
+                return None
+        return super().get_signing_serializer(app)
+
+
+app.session_interface = _RedisKeySessions()
+
+
+def _login_session(cred: dict[str, str]) -> None:
+    session.clear()
+    session.permanent = True
+    session["u"] = cred["user"]
+    session["f"] = auth.fingerprint(cred)
+
+
+app.permanent_session_lifetime = 30 * 24 * 3600
+app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True)
+
+
+@app.get("/login")
+def login_page() -> str:
+    try:
+        setup = auth.load(redis_store) is None
+    except redis.RedisError:
+        setup = False
+    return render_template("login.html", version=APP_VERSION, setup=setup)
+
+
+@app.post("/api/auth/login")
+def api_auth_login() -> ResponseReturnValue:
+    body = request.get_json(silent=True) or {}
+    ip = request.remote_addr or "?"
+    recent = [t for t in _login_fails[ip] if time.time() - t < LOGIN_WINDOW_S]
+    _login_fails[ip] = recent
+    if len(recent) >= LOGIN_MAX_FAILS:
+        return jsonify({"ok": False, "error": "Zu viele Versuche, bitte eine Minute warten"}), 429
+    user, password = str(body.get("user", "")), str(body.get("password", ""))
+    if not auth.verify(redis_store, user, password):
+        _login_fails[ip].append(time.time())
+        return jsonify({"ok": False, "error": "Benutzer oder Kennwort falsch"}), 401
+    _login_fails.pop(ip, None)
+    _login_session(auth.load(redis_store))
+    return jsonify({"ok": True})
+
+
+@app.post("/api/auth/setup")
+def api_auth_setup() -> ResponseReturnValue:
+    """Erster Zugang: nur moeglich, solange noch keiner festgelegt ist."""
+    body = request.get_json(silent=True) or {}
+    user, password = str(body.get("user", "")), str(body.get("password", ""))
+    problem = auth.validate(user, password)
+    if problem:
+        return jsonify({"ok": False, "error": problem}), 400
+    try:
+        created = auth.create_first(redis_store, user, password)
+    except redis.ReadOnlyError:
+        return jsonify({"ok": False, "error": "Dieser Pi ist gerade nur Kopie (Redis schreibgeschÃ¼tzt)"}), 503
+    if not created:
+        return jsonify({"ok": False, "error": "Es gibt bereits einen Zugang"}), 409
+    _login_session(auth.load(redis_store))
+    return jsonify({"ok": True})
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout() -> ResponseReturnValue:
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/auth/status")
+def api_auth_status() -> ResponseReturnValue:
+    return jsonify({"ok": True, "user": session.get("u")})
+
+
+@app.post("/api/auth/change")
+def api_auth_change() -> ResponseReturnValue:
+    body = request.get_json(silent=True) or {}
+    cred = auth.load(redis_store) or {}
+    if not auth.verify(redis_store, str(cred.get("user", "")), str(body.get("current", ""))):
+        return jsonify({"ok": False, "error": "Aktuelles Kennwort falsch"}), 403
+    user, password = str(body.get("user", "")), str(body.get("password", ""))
+    problem = auth.validate(user, password)
+    if problem:
+        return jsonify({"ok": False, "error": problem}), 400
+    auth.replace(redis_store, user, password)
+    _login_session(auth.load(redis_store))
+    return jsonify({"ok": True})
 
 @app.get("/")
 def index() -> str:
@@ -587,6 +737,7 @@ def api_post_vitals():
         "fw": payload.get("fw"),
         "uptime_s": payload.get("uptime_s"),
         "ssid": payload.get("ssid"),
+        "wv": payload.get("wv") if isinstance(payload.get("wv"), int) else None,
     }
     st["vitals"][mac] = new_vital
     # Uhrversatz Taster -> Server lernen (Server-Zeit minus Taster-Zeit); Sprung nach unten
@@ -700,7 +851,7 @@ def api_reload_startcards() -> tuple[ResponseReturnValue, int]:
         with urllib.request.urlopen(req, timeout=5) as resp:
             raw = resp.read()
 
-        # Encoding-Erkennung (wichtig für Umlaute in Namen)
+        # Encoding-Erkennung (wichtig fÃ¼r Umlaute in Namen)
         text_csv = None
         for enc in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
             try:
@@ -816,6 +967,88 @@ def _ota_offer_for(st: State, mac: str) -> dict[str, Any]:
     if fw == target["tag"] or _run_in_progress(st):
         return {}
     return {"ota_version": target["tag"], "ota_md5": target["md5"], "ota_size": target["size"]}
+
+
+def _load_wifi_cfg() -> Optional[dict[str, Any]]:
+    try:
+        return wifi_config.load(redis_store)
+    except redis.RedisError:
+        return None
+
+
+def _wifi_offer_for(st: State, mac: str) -> dict[str, Any]:
+    """Neue WLAN-Daten nur an bekannte Taster, bis sie den Empfang bestaetigt haben."""
+    if not mac or not any(t.get("mac") == mac for t in st.get("tasters", [])):
+        return {}
+    return wifi_config.offer_for(_load_wifi_cfg(), (st.get("vitals") or {}).get(mac))
+
+
+@app.get("/api/wifi-config")
+def api_wifi_config_get():
+    cfg = _load_wifi_cfg()
+    st = load_state()
+    cluster = node_info.cluster_status()
+    pis = [n for n in (cluster.get("self"), cluster.get("peer")) if n and n.get("reachable")]
+    out: dict[str, Any] = {
+        "configured": cfg is not None,
+        "confirm_text": OTA_CONFIRM_TEXT,
+        "competition_started": _competition_started(st),
+        "run_in_progress": _run_in_progress(st),
+        "pis": [
+            {"hostname": n.get("hostname"), "kind": n.get("kind"), "applied_ver": n.get("wifi_applied_ver", 0)}
+            for n in pis
+        ],
+    }
+    if cfg:
+        out.update({
+            "version": cfg["version"],
+            "ssid1": cfg["wifi1"]["ssid"],
+            "ssid2": cfg["wifi2"]["ssid"],
+            "force": bool(cfg.get("force")),
+            "tasters": wifi_config.taster_status(cfg, st, now_ms()),
+        })
+    return jsonify(out)
+
+
+@app.post("/api/wifi-config")
+def api_wifi_config_set():
+    """Neue WLAN-Daten speichern. Taster holen sie ab; die Pis stellen erst danach um."""
+    body = request.get_json(silent=True) or {}
+    st = load_state()
+    if _run_in_progress(st):
+        return jsonify({"ok": False, "error": "Ein Lauf laeuft gerade"}), 409
+    if _competition_started(st) and str(body.get("confirm", "")) != OTA_CONFIRM_TEXT:
+        return jsonify({"ok": False, "error": "locked", "confirm_text": OTA_CONFIRM_TEXT}), 409
+    old = _load_wifi_cfg() or {}
+    nets: list[dict[str, str]] = []
+    for idx in (1, 2):
+        ssid = str(body.get(f"ssid{idx}", "")).strip()
+        psk = str(body.get(f"psk{idx}", "")) or (old.get(f"wifi{idx}") or {}).get("psk", "")
+        problem = wifi_config.validate_ssid(ssid) or wifi_config.validate_psk(psk)
+        if problem:
+            return jsonify({"ok": False, "error": f"{'Koffer' if idx == 1 else 'Bad'}-WLAN: {problem}"}), 400
+        nets.append({"ssid": ssid, "psk": psk})
+    if nets[0]["ssid"] == nets[1]["ssid"]:
+        return jsonify({"ok": False, "error": "Koffer- und Bad-WLAN brauchen verschiedene Namen"}), 400
+    if old and (old["wifi1"], old["wifi2"]) == (nets[0], nets[1]):
+        return jsonify({"ok": False, "error": "Keine Aenderung"}), 400
+    try:
+        cfg = wifi_config.save(redis_store, nets[0], nets[1])
+    except redis.ReadOnlyError:
+        return jsonify({"ok": False, "error": "Dieser Pi ist gerade nur Kopie (Redis schreibgeschÃ¼tzt)"}), 503
+    logger.warning("Neue WLAN-Daten gespeichert (Fassung %s)", cfg["version"])
+    return jsonify({"ok": True, "version": cfg["version"]})
+
+
+@app.post("/api/wifi-config/force")
+def api_wifi_config_force():
+    """Pis sofort umstellen, auch wenn nicht alle Taster bestaetigt haben."""
+    if _run_in_progress(load_state()):
+        return jsonify({"ok": False, "error": "Ein Lauf laeuft gerade"}), 409
+    if not _load_wifi_cfg():
+        return jsonify({"ok": False, "error": "Keine WLAN-Daten gespeichert"}), 400
+    wifi_config.set_force(redis_store)
+    return jsonify({"ok": True})
 
 
 @app.get("/api/firmware/releases")
@@ -1230,7 +1463,7 @@ def api_post_triggers():
 
 
 def _display_text(text: Any, limit: int = 30) -> str:
-    """Bereinigt Anzeigetext und erhält Umlaute als UTF-8."""
+    """Bereinigt Anzeigetext und erhÃ¤lt Umlaute als UTF-8."""
     s = unicodedata.normalize("NFC", str(text or ""))
     return s.replace('"', "").replace("\\", "").strip()[:limit]
 
@@ -1287,6 +1520,7 @@ def api_get_display():
         "start_locked_until_ms": int(st.get("start_locked_until_ms", 0) or 0),
     }
     out.update(_ota_offer_for(st, mac))
+    out.update(_wifi_offer_for(st, mac))
     if lane is None:
         pending_lane = next(
             (k for k, v in ((st.get("assignments") or {}).get("pending") or {}).items() if v == mac),
@@ -1407,7 +1641,7 @@ def api_get_run_status():
 
 @app.post("/api/current-run")
 def api_post_current_run():
-    """Bereitet einen neuen Versuch vor, ohne bereits gemessene Zeiten zu verändern."""
+    """Bereitet einen neuen Versuch vor, ohne bereits gemessene Zeiten zu verÃ¤ndern."""
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
     try:

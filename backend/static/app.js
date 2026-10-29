@@ -28,6 +28,7 @@ let maxLane = 0;
 // -----------------------------
 async function apiGet(path) {
   const r = await fetch(path, { headers: { "Accept": "application/json" } });
+  if (r.status === 401) { location.href = "/login"; throw new Error("Nicht angemeldet"); }
   if (!r.ok) throw new Error("HTTP " + r.status);
   return await r.json();
 }
@@ -38,12 +39,117 @@ async function apiPost(path, body) {
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify(body || {})
   });
+  if (r.status === 401 && !path.startsWith("/api/auth/")) { location.href = "/login"; throw new Error("Nicht angemeldet"); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok || (j && j.ok === false)) {
     const msg = (j && j.error) ? j.error : ("HTTP " + r.status);
     throw new Error(msg);
   }
   return j;
+}
+
+// -----------------------------
+// Zugang und WLAN-Netze
+// -----------------------------
+let wifiInfo = null;
+let wifiFilled = false;
+
+function showError(id, text) {
+  const el = byId(id);
+  el.textContent = text || "";
+  el.classList.toggle("d-none", !text);
+}
+
+async function refreshAccount() {
+  const s = await apiGet("/api/auth/status");
+  byId("accountUser").textContent = s.user || "–";
+}
+
+async function saveAccount() {
+  showError("accountError", "");
+  try {
+    await apiPost("/api/auth/change", {
+      current: byId("accCurrent").value,
+      user: byId("accUser").value.trim(),
+      password: byId("accPassword").value
+    });
+  } catch (e) {
+    showError("accountError", e.message);
+    return;
+  }
+  for (const id of ["accCurrent", "accUser", "accPassword"]) byId(id).value = "";
+  await refreshAccount().catch(() => {});
+  alert("Zugang geändert.");
+}
+
+async function logout() {
+  await apiPost("/api/auth/logout").catch(() => {});
+  location.href = "/login";
+}
+
+async function refreshWifi() {
+  wifiInfo = await apiGet("/api/wifi-config");
+  const i = wifiInfo;
+  // Felder nur beim ersten Laden befuellen, damit Eingaben nicht ueberschrieben werden
+  if (!wifiFilled && i.configured) {
+    byId("wifiSsid1").value = i.ssid1;
+    byId("wifiSsid2").value = i.ssid2;
+    wifiFilled = true;
+  }
+  const lines = [];
+  let waiting = false;
+  if (i.configured) {
+    const t = i.tasters;
+    lines.push(`Taster: ${t.acked.length} von ${t.online.length} online haben die neuen Daten bestätigt` +
+      (t.missing.length ? ` (es fehlen: ${t.missing.map(escapeHtml).join(", ")})` : ""));
+    for (const p of i.pis) {
+      const done = p.applied_ver >= i.version;
+      if (!done) waiting = true;
+      lines.push(`Pi ${escapeHtml(p.hostname || "")}${p.kind ? " (" + escapeHtml(p.kind) + ")" : ""}: ` +
+        (done ? "umgestellt" : (i.force || (t.online.length && !t.missing.length) ? "wird umgestellt …" : "wartet auf die Taster")));
+    }
+  } else {
+    lines.push("Noch keine Daten hinterlegt. Die Taster nutzen die Werte aus ihrer Firmware.");
+  }
+  byId("wifiStatus").innerHTML = lines.join("<br>");
+  byId("btnWifiForce").classList.toggle("d-none", !(i.configured && waiting && !i.force));
+}
+
+async function saveWifi() {
+  showError("wifiError", "");
+  const body = {
+    ssid1: byId("wifiSsid1").value.trim(), psk1: byId("wifiPsk1").value,
+    ssid2: byId("wifiSsid2").value.trim(), psk2: byId("wifiPsk2").value
+  };
+  if (!window.confirm("WLAN-Daten ändern? Erst übernehmen die Taster sie, danach stellen die Pis ihr WLAN um. Die Verbindung zur Oberfläche kann kurz abbrechen.")) return;
+  try {
+    try {
+      await apiPost("/api/wifi-config", body);
+    } catch (e) {
+      if (e.message !== "locked") throw e;
+      const typed = window.prompt(
+        `ACHTUNG: Der Wettkampf läuft bereits. Zur Bestätigung ${wifiInfo.confirm_text} eintippen:`);
+      if (typed !== wifiInfo.confirm_text) return;
+      await apiPost("/api/wifi-config", { ...body, confirm: typed });
+    }
+  } catch (e) {
+    showError("wifiError", e.message);
+    return;
+  }
+  byId("wifiPsk1").value = "";
+  byId("wifiPsk2").value = "";
+  await refreshWifi().catch(() => {});
+}
+
+async function forceWifi() {
+  if (!window.confirm("Die Pis jetzt umstellen? Taster, die noch nicht bestätigt haben, finden das Netz danach evtl. nicht mehr.")) return;
+  try {
+    await apiPost("/api/wifi-config/force");
+  } catch (e) {
+    showError("wifiError", e.message);
+    return;
+  }
+  await refreshWifi().catch(() => {});
 }
 
 // -----------------------------
@@ -809,10 +915,23 @@ async function init() {
   });
   byId("settings-tab").addEventListener("shown.bs.tab", () => {
     refreshFirmware().catch(() => {});
-    refreshPiUpdate().catch(() => {});
+    refreshPiUpdate().catch(e => {
+      const err = byId("piError");
+      err.textContent = "Versionen konnten nicht geladen werden: " + e.message;
+      err.classList.remove("d-none");
+    });
+    refreshWifi().catch(() => {});
+    refreshAccount().catch(() => {});
   });
+  byId("btnWifiSave").addEventListener("click", saveWifi);
+  byId("btnWifiForce").addEventListener("click", forceWifi);
+  byId("btnAccountSave").addEventListener("click", saveAccount);
+  byId("btnLogout").addEventListener("click", logout);
   setInterval(() => {
-    if (byId("settings").classList.contains("active")) refreshFirmware().catch(() => {});
+    if (byId("settings").classList.contains("active")) {
+      refreshFirmware().catch(() => {});
+      refreshWifi().catch(() => {});
+    }
   }, 5000);
   byId("tasterList").addEventListener("click", ev => {
     const b = ev.target.closest(".btn-unassign");

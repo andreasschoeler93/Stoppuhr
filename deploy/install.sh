@@ -32,6 +32,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now stoppuhr
 sudo systemctl restart stoppuhr
 
+echo "== Knotendienst (Systemstatus und WLAN-Umstellung) =="
+sed -e "s|__DIR__|$DIR|g" "$DIR/deploy/zwei-pi/stoppuhr-knoten.service" \
+  | sudo tee /etc/systemd/system/stoppuhr-knoten.service >/dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable stoppuhr-knoten
+sudo systemctl restart stoppuhr-knoten
+
 sleep 3
 systemctl --no-pager --lines=5 status stoppuhr || true
 echo

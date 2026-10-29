@@ -1,44 +1,24 @@
-# Stoppuhr – v0.5.1 (Stable Beta)
+# Stoppuhr – Pi-Software (v0.8.0)
 
-Webbasierte Wettkampf-Stoppuhr mit ESP-Tastern und Raspberry-Pi-Backend.
+Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
+liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
 
----
+> **Der Pi wertet aus. Die Taster messen Zeit. Nichts geht verloren.**
 
-## Aktueller Stand (v0.5.1)
+Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Zwei-Pi-Betrieb (Koffer und Bad): [deploy/zwei-pi/README.md](deploy/zwei-pi/README.md).
 
-✅ Startkarten-Import (manuell geladen)
+## Funktionen
 
-✅ Dynamische Bahnanzahl (max aus CSV, Rest inaktiv)
+- Startkarten-Import (manuell), dynamische Bahnanzahl, Drag & Drop der Taster auf Bahnen und Starter
+- Start, Stopp, automatisch nächster Lauf, Abbruch und Wiederholung eines Laufs
+- Taster tauschen über „Bereitschaft“, Systemstatus, Zwei-Pi-Betrieb mit Ausfallübernahme
+- Anmeldung für die Oberfläche, WLAN-Daten und Updates (Pi und Taster) aus der Oberfläche
 
-✅ Drag & Drop Taster-Zuordnung (immer möglich)
+## Installation
 
-✅ Start / Stopp / Auto-Next-Run
+### Auf dem Raspberry Pi (ohne Docker, empfohlen)
 
-✅ Wiederholungsläufe ohne Überschreiben vorheriger Zeiten
-
-✅ GitHub-fähig & reproduzierbar
-
----
-
-## Installation (Raspberry Pi)
-
-```bash
-cd /home/dlrg
-git clone https://github.com/andreasschoeler93/Stoppuhr.git stoppuhr
-cd stoppuhr
-
-# Start application via Docker Compose
-docker compose up --build -d
-```
-
-Weboberfläche:
-```
-http://<PI-IP>:1999
-```
-
-### Alternative: ohne Docker (direkt auf dem Pi)
-
-Installiert Python-Umgebung, Redis und einen systemd-Dienst, der beim Booten startet:
+Installiert Python-Umgebung, Redis, chrony und systemd-Dienste, die beim Booten starten:
 
 ```bash
 sudo apt-get install -y git
@@ -47,88 +27,119 @@ cd Stoppuhr
 bash deploy/install.sh
 ```
 
-- Dienst: `sudo systemctl status stoppuhr`, Log: `journalctl -u stoppuhr -f`.
-- Update: `git pull && sudo systemctl restart stoppuhr`.
+- Oberfläche: `http://<PI-IP>:1999`. Beim ersten Öffnen legst du Benutzername und Kennwort fest.
+- Dienste: `stoppuhr` (Server) und `stoppuhr-knoten` (Systemstatus, WLAN-Umstellung). Log: `journalctl -u stoppuhr -f`.
 - Die Daten liegen in Redis (`save 10 1`), nicht im Projektordner.
-- Konfiguriert wird über Umgebungsvariablen in `deploy/stoppuhr.service`
-  (`REDIS_HOST`, `REDIS_PORT`, `PORT`, `HEATS_XML_PATH`); die Voreinstellungen entsprechen Docker.
+- Einstellungen per Umgebungsvariable in `deploy/stoppuhr.service`: `REDIS_HOST`, `REDIS_PORT`, `PORT`, `HEATS_XML_PATH`.
 - Zeitserver für die Taster: in `/etc/chrony/chrony.conf` `allow <Taster-Netz>` ergänzen
   (ohne Internet zusätzlich `local stratum 10`), danach `sudo systemctl restart chrony`.
 
+### Mit Docker (Entwicklung)
+
+```bash
+docker compose up --build -d
+```
+
+Pi-Software-Wechsel und WLAN-Umstellung funktionieren nur ohne Docker.
+
+### Tests
+
+```bash
+docker run --rm -v "$PWD/backend:/backend" -w /backend stoppuhr-app:latest python -m unittest discover -s tests
+```
+
+## Bedienung
+
+### Anmeldung
+
+Die ganze Oberfläche ist durch Benutzername und Kennwort geschützt. Beim ersten Öffnen legst du beide fest.
+Ändern: **Einstellungen → Zugang zur Oberfläche** (das alte Kennwort wird abgefragt; andere Sitzungen werden abgemeldet).
+Ohne Anmeldung bleiben nur erreichbar: die Schnittstellen der Taster (`/api/taster`, `/api/vitals`, `/api/triggers`,
+`/api/display`, `/api/abort-run`, Firmware-Download, `/api/ota-status`), `/api/version` und der Export `/heats.xml` für JAuswertung.
+Die Sitzung bleibt 30 Tage; nach fünf Fehlversuchen pro Minute sperrt der Server die Anmeldung kurz.
+Der Schlüssel der Sitzungen und der Kennwort-Hash liegen in Redis und werden im Zwei-Pi-Betrieb mitkopiert.
+Kennwort vergessen: auf dem Pi `redis-cli del AUTH`, danach beim nächsten Öffnen neu festlegen.
+
+### Wettkampf beenden
+
+**Einstellungen → Wettkampf beenden** löscht nach Bestätigung Startkarten, Zeiten, Taster und Bahnzuordnungen und leert den XML-Export.
+Der Server sendet den Abschaltbefehl während der eingestellten Dauer (Standard 10 s) bei den Display-Abfragen mit.
+Taster, die in dieser Zeit nicht verbunden sind, empfangen ihn nicht. Buchstaben werden danach ab A neu vergeben.
+
+### Abbruch und Wiederholung
+
+Ein langer Druck (2 s) am Starter bricht den Versuch ab (dreimal langes Piepen) und bereitet die nächste Version desselben Laufs vor.
+Die Stopp-Sperre beginnt mit dem Abbruch. Über **Versuch vorbereiten** geht das auch in der Oberfläche.
+Gespeicherte Zeiten bleiben; Versionen werden getrennt nummeriert (z. B. `5/2`) und im XML-Export als eigener Heat ausgegeben.
+
 ### Taster-Anzeige
 
-`GET /api/display` liefert Namen und Disziplinen unverändert mit deutschen Umlauten als UTF-8.
-Die Firmware kann dadurch `ä`, `ö`, `ü`, `Ä`, `Ö` und `Ü` korrekt darstellen.
+`GET /api/display` liefert Namen und Disziplinen als UTF-8 mit Umlauten; die Firmware stellt `ä ö ü Ä Ö Ü` korrekt dar.
 
-Über **Einstellungen → Wettkampf beenden** lässt sich nach einer Bestätigung der Wettkampf zurücksetzen.
-Dabei werden Startkarten, Zeiten/Ergebnisse, Taster und Bahnzuordnungen gelöscht; der XML-Export wird geleert.
-Der Server sendet den Abschaltbefehl während der eingestellten Dauer (Standard: 10 Sekunden) bei den
-regelmäßigen Display-Abfragen mit. Taster, die in dieser Zeit nicht mit dem Pi verbunden sind, können ihn
-nicht empfangen. Die Buchstaben werden bei der nächsten Anmeldung wieder ab A vergeben.
+## Einstellungen: WLAN, Zugang und Updates
 
-### Abbruch und Wiederholung eines Laufs
+### WLAN-Netze (ab v0.8.0)
 
-Ein langer Druck (2 Sekunden) auf den Starter-Taster bricht den laufenden Versuch ab und bereitet
-die nächste Version desselben Laufs vor. Die Stopp-Sperre beginnt mit dem Abbruch; vor ihrem Ablauf
-wird ein kurzer Startdruck abgewiesen. Über **Versuch vorbereiten** lässt sich im Webinterface
-ebenfalls eine neue Version eines ausgewählten Laufs anlegen. Bereits gespeicherte Zeiten bleiben
-erhalten; Versionen werden separat nummeriert (z. B. `5/2`) und im XML-Export als eigener Heat
-ausgegeben.
+**Einstellungen → WLAN-Netze**: Name und Kennwort von Koffer- und Bad-WLAN. Leeres Kennwortfeld = unverändert.
+Ablauf nach **Übernehmen**:
 
-### Taster-Firmware aktualisieren (ab v0.7.0)
+1. Die online Taster holen sich die neuen Daten, speichern sie vor und bestätigen sie (Anzeige „n von m bestätigt“).
+2. Erst wenn alle online Taster bestätigt haben, stellt jeder Pi sein WLAN um (`nmcli con modify ap …`, Dienst `stoppuhr-knoten`).
+   Der Koffer-Pi nimmt das Koffer-WLAN, der Bad-Pi das Bad-WLAN, ein einzelner Pi das Koffer-WLAN.
+3. Die Taster verlieren kurz die Verbindung, probieren dann die neuen Daten und übernehmen sie dauerhaft.
 
-Unter **Einstellungen → Taster-Firmware** listet der Pi alle Firmware-Releases aus GitHub
-(`andreasschoeler93/Taster`, änderbar mit `FIRMWARE_REPO`). **Auf Taster laden** speichert die gewählte
-`firmware.bin` unter `backend/firmware_cache/` (`FIRMWARE_DIR`) und bietet sie allen Tastern an, die gerade online
-sind. Die Taster laden sie selbst vom Pi, prüfen die MD5 und starten neu. Ohne Internet stehen die bereits
-gespeicherten Versionen zur Verfügung.
+Hinweise:
 
-- Es werden nur Releases ab `v0.11.0` angeboten (frühere Firmware kann sich so nicht installieren lassen).
-- Sobald im Wettkampf ein Lauf gestartet wurde, ist das Update gesperrt und nur nach Eintippen von `UPDATE` möglich.
-- Ein Taster bekommt die Datei nie, solange ein Lauf läuft. Ein fehlgeschlagenes Update wird in der Tabelle angezeigt.
-- Releases entstehen automatisch, wenn im Taster-Repo ein Tag `vX.Y.Z` hochgeladen wird.
+- **Jetzt auch am Pi umstellen** erzwingt Schritt 2, auch wenn nicht alle Taster bestätigt haben.
+  Taster, die offline waren, finden das Netz danach nicht mehr und müssen per USB neu geflasht werden.
+- Die Verbindung zur Oberfläche bricht beim Umstellen kurz ab, wenn du über das umgestellte WLAN verbunden bist.
+- Während eines Laufs gesperrt; nach dem ersten gestarteten Lauf nur nach Eintippen von `UPDATE`.
+- Die Daten gehen im Klartext über das interne Netz an die Taster (`GET /api/display`, nur bekannte Taster).
+- Voraussetzung: Die WLAN-Verbindung des Pi heißt `ap` (so legt sie `deploy/zwei-pi/install-zwei-pi.sh` an).
+  Ändere eine WLAN-Verbindung von Hand, den Namen über `AP_CONNECTION` setzen.
+- Taster mit Firmware vor `v0.12.0` bestätigen nicht; sie bleiben bei den alten Daten.
 
-### Pi-Software wechseln (ab v0.7.1)
+### Taster-Firmware (ab v0.7.0)
 
-Unter **Einstellungen → Pi-Software** wählst du eine Version (Git-Tag ab `v0.5.1`) und klickst auf
-**Übernehmen und neu starten**. Der Pi holt die Tags von GitHub, wechselt darauf (`git checkout`), installiert
-geänderte Abhängigkeiten und beendet den Dienst; systemd startet ihn mit der neuen Version wieder (ca. 5 s).
+**Einstellungen → Taster-Firmware** listet die Firmware-Releases aus GitHub (`andreasschoeler93/Taster`, änderbar mit `FIRMWARE_REPO`).
+**Auf Taster laden** speichert die `firmware.bin` unter `backend/firmware_cache/` (`FIRMWARE_DIR`) und bietet sie allen online Tastern an.
+Diese laden sie vom Pi, prüfen die MD5 und starten neu. Ohne Internet stehen bereits gespeicherte Versionen zur Verfügung.
 
-- Nur bei der Installation ohne Docker (Git-Checkout). Bei lokalen Änderungen im Ordner bricht der Wechsel mit Fehlermeldung ab.
-- Gesperrt, solange ein Lauf läuft; nach dem ersten gestarteten Lauf nur nach Eintippen von `UPDATE`.
-- Wechselt nur den Pi, dessen Weboberfläche du gerade bedienst (im Zwei-Pi-Betrieb beide einzeln).
-- Der Stand ist danach „detached“ auf dem Tag. Zurück zum Branch: `git switch main` (bzw. `feature/taster-anmeldung`).
+- Angeboten werden nur Releases ab `v0.11.0`.
+- Gesperrt, sobald ein Lauf gestartet wurde (nur mit `UPDATE`); ein Taster bekommt die Datei nie während eines Laufs.
+- Fehlgeschlagene Updates stehen in der Tabelle. Releases entstehen automatisch, wenn im Taster-Repo ein Tag `vX.Y.Z` hochgeladen wird.
+
+### Pi-Software (ab v0.7.1)
+
+**Einstellungen → Pi-Software**: Version (Git-Tag ab `v0.5.1`) wählen und **Übernehmen und neu starten**.
+Der Pi holt die Tags von GitHub, wechselt darauf (`git checkout`), installiert geänderte Abhängigkeiten und startet den Dienst neu (ca. 5 s).
+
+- Nur ohne Docker. Bei lokalen Änderungen im Ordner bricht der Wechsel mit Fehlermeldung ab.
+- Gesperrt während eines Laufs; nach dem ersten gestarteten Lauf nur mit `UPDATE`.
+- Wechselt nur den Pi, dessen Oberfläche du bedienst (im Zwei-Pi-Betrieb beide einzeln).
+- Danach steht der Pi „detached“ auf dem Tag. Zurück zum Branch: `cd ~/apps/stoppuhr && git switch main`.
+- Bleibt die Liste leer: `curl -s localhost:1999/api/pi-update/releases` zeigt Fehler (z. B. kein Internet beim Abholen der Tags). Voraussetzung ist Version ab v0.7.1.
 
 ## Versionierung
 
-- Produktive Basis: **v0.5.1**
-- Entwicklung ab jetzt **nur über GitHub**
-- Neue Features → neue Minor-Version
+Schema `MAJOR.MINOR.PATCH`, die Version steht in `backend/app.py` (`APP_VERSION`). Jede Änderung erhöht sie und bekommt einen Tag:
+`git tag vX.Y.Z && git push origin vX.Y.Z`. Der Verlauf steht in [CHANGELOG.md](CHANGELOG.md).
 
----
+- **PATCH**: Fehlerkorrekturen
+- **MINOR**: neue Funktionen, abwärtskompatibel
+- **MAJOR**: grundlegende Änderungen; `1.0.0` = Wettkampf-Freigabe
 
-## Roadmap (Checklist)
+Update auf dem Pi ohne Oberfläche:
 
-### v0.4.x
-- [x] Dynamische Bahnen
-- [x] Persistente Taster-Zuordnung
+```bash
+cd ~/apps/stoppuhr && git fetch origin --tags && git switch main && git pull --ff-only origin main && sudo systemctl restart stoppuhr
+```
+
+## Roadmap
+
+- [x] Dynamische Bahnen, persistente Taster-Zuordnung
+- [x] Zwei-Pi-Betrieb, Updates aus der Oberfläche, Anmeldung
 - [ ] Backup-Zieleinlauf (Differenzanzeige)
 - [ ] Warnlogik (gelb / rot / ok)
-
-### v0.5.x
-- [ ] Lauf-Historie
-- [ ] Nachträgliche Korrektur per Drag & Drop
-- [ ] Wiederaufnahme nach Neustart
-
-### v1.0
-- [ ] Wettkampftauglich
-- [ ] Dokumentation
-- [ ] Freeze
-
----
-
-## Philosophie
-
-**Der Pi wertet aus.  
-Die Taster messen Zeit.  
-Nichts geht verloren.**
+- [ ] Lauf-Historie, nachträgliche Korrektur per Drag & Drop
+- [ ] 1.0: wettkampftauglich, Dokumentation, Freeze

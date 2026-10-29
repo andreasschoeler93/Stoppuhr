@@ -34,6 +34,7 @@ class FirmwareUpdateTests(unittest.TestCase):
         now = stopwatch.now_ms()
         self.state["vitals"] = {"A": {"ts": now, "fw": "v0.10.6"}, "B": {"ts": now - 600_000, "fw": "v0.10.6"}}
         self.redis = FakeRedis()
+        stopwatch.app.config["AUTH_DISABLED"] = True
         self.client = stopwatch.app.test_client()
         patches = [
             patch.object(stopwatch, "load_state", side_effect=lambda: copy.deepcopy(self.state)),

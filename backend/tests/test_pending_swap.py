@@ -11,6 +11,7 @@ class PendingSwapTests(unittest.TestCase):
         self.state["assignments"]["mapping"] = {"1": "A"}
         self.state["startcards_per_run"] = {"1": [{"Bahn": "1", "Name": "X", "Disziplin": "D"}]}
         self.state["current_run"] = 1
+        stopwatch.app.config["AUTH_DISABLED"] = True
         self.client = stopwatch.app.test_client()
         for name, fn in (
             ("load_state", lambda: copy.deepcopy(self.state)),
