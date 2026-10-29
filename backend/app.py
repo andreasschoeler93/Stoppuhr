@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.9.9
+# Version: v0.10.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -35,7 +35,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.9.9"
+APP_VERSION: Final[str] = "0.10.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -768,7 +768,8 @@ def api_vitals_history():
 
 @app.get("/api/taster")
 def api_get_taster():
-    return jsonify({"tasters": load_state()["tasters"]})
+    st = load_state()
+    return jsonify({"tasters": [_taster_with_vitals(t, st.get("vitals", {})) for t in st["tasters"]]})
 
 
 @app.post("/api/taster")

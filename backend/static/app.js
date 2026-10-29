@@ -46,8 +46,26 @@ async function refreshVitals() {
     if (d.starts && d.starts.length) starts = d.starts;
     return { label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
   }));
-  vitalsData = { hours: Number(hours), series, starts: starts || [] };
+  vitalsData = { hours: Number(hours), series, starts: starts || [], tasters: list };
   drawVitals();
+}
+
+function vitalsStatusHtml() {
+  const list = vitalsData.tasters || [];
+  const num = (v, dec, unit) => (v === null || v === undefined) ? "–" : `${Number(v).toFixed(dec)} ${unit}`;
+  const rows = [
+    ["Status", t => t.online ? '<span class="badge text-bg-success">online</span>' : '<span class="badge text-bg-secondary">offline</span>'],
+    ["Akku", t => num(t.battery, 0, "%")],
+    ["Spannung", t => num(t.vbat, 2, "V")],
+    ["Temperatur", t => num(t.temp, 1, "°C")],
+    ["Luftfeuchte", t => num(t.humidity, 0, "%")],
+    ["WLAN", t => num(t.rssi, 0, "dBm")],
+  ];
+  if (!list.length) return '<span class="text-muted small">Noch kein Taster angemeldet.</span>';
+  const head = list.map((t, i) => `<th class="text-center" style="color:${TASTER_COLORS[i % TASTER_COLORS.length]}">${escapeHtml(t.letter || "?")}</th>`).join("");
+  const body = rows.map(([name, f]) => `<tr><th class="text-nowrap fw-normal">${name}</th>${
+    list.map(t => `<td class="text-center text-nowrap${t.online || name === "Status" ? "" : " text-muted"}">${f(t)}</td>`).join("")}</tr>`).join("");
+  return `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function drawVitals() {
@@ -57,10 +75,13 @@ function drawVitals() {
     ? s.map(x => `<span class="me-3"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${x.color};vertical-align:-1px"></span> ${escapeHtml(x.label)}</span>`).join("")
     : "Noch kein Taster angemeldet.";
   if (!box.children.length) {
-    box.innerHTML = VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
+    box.innerHTML = `<div class="col-lg-6"><div class="card h-100"><div class="card-body p-2">
+      <strong class="small">Zustand der Taster</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>` +
+      VITAL_CHARTS.map(c => `<div class="col-lg-6"><div class="card"><div class="card-body p-2">
       <strong class="small">${c.title} (${c.unit})</strong>
       <canvas id="vc-${c.idx}" style="width:100%;height:180px"></canvas></div></div></div>`).join("");
   }
+  byId("vitalsStatus").innerHTML = vitalsStatusHtml();
   VITAL_CHARTS.forEach(c => drawVitalChart(c, s));
 }
 
