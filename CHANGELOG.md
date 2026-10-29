@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.9.3 | 2026-10-29 | Vitaldaten: zusätzlich Zeitraum „letzte 15 Minuten“ und „letzte 30 Minuten“. |
 | v0.9.2 | 2026-10-29 | Vitaldaten: senkrechte gestrichelte Linien mit „L<Nr>“ bei jedem Laufstart (Redis `RUN_STARTS`, die letzten 200 Starts). |
 | v0.9.1 | 2026-10-29 | Vitaldaten: alle Taster in einem Diagramm je Messwert, jeder Taster in eigener Farbe. |
 | v0.9.0 | 2026-10-29 | Neuer Tab „Vitaldaten“: Diagramme für Akku, Akkuspannung, Temperatur, Luftfeuchte und WLAN-Stärke je Taster (letzte 6 Stunden, in Redis gespeichert). |
