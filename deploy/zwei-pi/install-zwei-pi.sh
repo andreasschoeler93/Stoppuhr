@@ -73,6 +73,8 @@ fi
 echo "== Name im Router-Netz: stoppuhr-$ROLLE.local =="
 sudo apt-get install -y avahi-daemon
 sudo hostnamectl set-hostname "stoppuhr-$ROLLE"
+sudo sed -i '/^127\.0\.1\.1 /d' /etc/hosts
+echo "127.0.1.1 stoppuhr-$ROLLE" | sudo tee -a /etc/hosts >/dev/null
 sudo systemctl enable --now avahi-daemon
 sudo systemctl restart avahi-daemon
 
@@ -88,7 +90,7 @@ sudo sed -i 's/^bind .*/bind 127.0.0.1 -'"$OWN_IP"'/' /etc/redis/redis.conf
 sudo sed -i 's/^protected-mode .*/protected-mode no/' /etc/redis/redis.conf
 if [ "$ROLLE" = "bad" ]; then
   # Bad-Pi startet als Kopie des Koffer-Pi
-  grep -q '^replicaof ' /etc/redis/redis.conf || echo "replicaof $KOFFER_IP 6379" | sudo tee -a /etc/redis/redis.conf >/dev/null
+  sudo grep -q '^replicaof ' /etc/redis/redis.conf || echo "replicaof $KOFFER_IP 6379" | sudo tee -a /etc/redis/redis.conf >/dev/null
 fi
 sudo systemctl restart redis-server
 
