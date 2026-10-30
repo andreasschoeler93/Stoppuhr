@@ -647,6 +647,7 @@ async function loadSettingsIntoUI() {
   byId("stopLockoutInput").value = s.stop_lockout_s ?? "5";
   byId("shutdownGraceInput").value = s.shutdown_grace_s ?? "10";
   byId("starterIsFinishInput").checked = s.starter_is_finish === "1";
+  byId("starterIsFinishQuick").checked = s.starter_is_finish === "1";
 }
 
 async function loadStartcardsFromBackend() {
@@ -1396,6 +1397,16 @@ async function init() {
     } catch (e) {
       byId("startcardsStatus").textContent = "Status: Fehler: " + e.message;
       byId("startcardsStatus").classList.add("text-danger");
+    }
+  });
+
+  byId("starterIsFinishQuick").addEventListener("change", async ev => {
+    try {
+      await apiPost("/api/settings", { starter_is_finish: ev.target.checked });
+      await loadSettingsIntoUI();
+    } catch (e) {
+      alert("Speichern fehlgeschlagen: " + e.message);
+      await loadSettingsIntoUI();
     }
   });
 
