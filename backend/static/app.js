@@ -60,18 +60,88 @@ async function refreshVitals() {
   drawVitals();
 }
 
+// Grenzwerte: low = Wert darunter, high = Wert darüber. [gelb ab, rot ab]
+const LIMITS = {
+  taster: {
+    battery: { low: [30, 15] }, vbat: { low: [3.5, 3.3] }, temp: { high: [45, 55] },
+    humidity: { high: [80, 90] }, rssi: { low: [-75, -85] },
+  },
+  pi: {
+    cpu_temp: { high: [70, 80] }, cpu_percent: { high: [85, 95] },
+    mem_percent: { high: [85, 95] }, disk_percent: { high: [85, 95] },
+  },
+  charger: { temp: { high: [45, 60] }, humidity: { high: [80, 90] }, rssi: { low: [-75, -85] } },
+};
+
+// Liefert "danger" (rot), "warning" (gelb) oder null
+function limitLevel(value, rule) {
+  if (value === null || value === undefined || !rule || Number.isNaN(Number(value))) return null;
+  const v = Number(value);
+  if (rule.low) return v <= rule.low[1] ? "danger" : v <= rule.low[0] ? "warning" : null;
+  if (rule.high) return v >= rule.high[1] ? "danger" : v >= rule.high[0] ? "warning" : null;
+  return null;
+}
+
+function levelHtml(text, level) {
+  return level ? `<span class="val-${level}">${text}</span>` : text;
+}
+
+// Banner oben für Taster, Pis und Ladekoffer-Messwerte (Ladeplatine-Fehler kommen aus refreshCharger)
+function sensorAlerts(tasters, piNodes) {
+  const alerts = [];
+  const push = (level, text) => { if (level) alerts.push({ level, text }); };
+  const word = level => level === "danger" ? "kritisch" : "auffällig";
+  const check = (who, value, rule, label, dec, unit) => {
+    const level = limitLevel(value, rule);
+    push(level, `${who}: ${label} ${word(level)} (${Number(value).toFixed(dec)} ${unit}).`);
+  };
+  tasters.filter(t => t.online).forEach(t => {
+    const who = `Taster ${t.letter || "?"}`, lim = LIMITS.taster;
+    check(who, t.battery, lim.battery, "Akku", 0, "%");
+    check(who, t.vbat, lim.vbat, "Akkuspannung", 2, "V");
+    check(who, t.temp, lim.temp, "Temperatur", 1, "°C");
+    check(who, t.humidity, lim.humidity, "Luftfeuchte", 0, "%");
+    check(who, t.rssi, lim.rssi, "WLAN-Signal", 0, "dBm");
+  });
+  piNodes.forEach(n => {
+    const who = n.name || "Pi", lim = LIMITS.pi;
+    if (!n.reachable) { push("danger", `${who}: nicht erreichbar.`); return; }
+    check(who, n.cpu_temp, lim.cpu_temp, "CPU-Temperatur", 1, "°C");
+    check(who, n.cpu_percent, lim.cpu_percent, "CPU-Last", 0, "%");
+    check(who, n.mem_percent, lim.mem_percent, "Speicher", 0, "%");
+    check(who, n.disk_percent, lim.disk_percent, "SD-Karte", 0, "%");
+  });
+  const c = chargerData && chargerData.known && chargerData.online ? chargerData.status : null;
+  if (c) {
+    check("Ladekoffer", c.temp, LIMITS.charger.temp, "Temperatur", 1, "°C");
+    check("Ladekoffer", c.humidity, LIMITS.charger.humidity, "Luftfeuchte", 0, "%");
+    check("Ladekoffer", c.rssi, LIMITS.charger.rssi, "WLAN-Signal", 0, "dBm");
+  }
+  return alerts;
+}
+
+async function refreshSensorAlerts() {
+  const [list, pi] = await Promise.all([
+    apiGet("/api/taster").catch(() => ({ tasters: [] })),
+    apiGet("/api/vitals/pi?hours=1").catch(() => ({ nodes: [] })),
+  ]);
+  const alerts = sensorAlerts(list.tasters || [], pi.nodes || []);
+  byId("sensorAlerts").innerHTML = alerts
+    .map(a => `<div class="alert alert-${a.level} py-1 px-2 small mb-2">${escapeHtml(a.text)}</div>`).join("");
+}
+
 function piStatusHtml() {
   const nodes = vitalsData.piNodes || [];
   if (!nodes.length) return "";
-  const num = (v, dec, unit) => (v === null || v === undefined) ? "–" : `${Number(v).toFixed(dec)} ${unit}`;
+  const num = (v, dec, unit, rule) => (v === null || v === undefined) ? "–" : levelHtml(`${Number(v).toFixed(dec)} ${unit}`, limitLevel(v, rule));
   const up = s => s === null || s === undefined ? "–" : (s >= 86400 ? `${Math.floor(s / 86400)} d ${Math.floor(s % 86400 / 3600)} h` : `${Math.floor(s / 3600)} h ${Math.floor(s % 3600 / 60)} min`);
   const rows = [
     ["Status", n => !n.reachable ? '<span class="badge text-bg-danger">nicht erreichbar</span>'
       : (n.active ? '<span class="badge text-bg-success">arbeitet</span>' : '<span class="badge text-bg-secondary">Bereitschaft</span>')],
-    ["CPU-Temp.", n => num(n.cpu_temp, 1, "°C")],
-    ["CPU-Last", n => num(n.cpu_percent, 0, "%")],
-    ["Speicher", n => num(n.mem_percent, 0, "%")],
-    ["SD-Karte", n => num(n.disk_percent, 0, "%")],
+    ["CPU-Temp.", n => num(n.cpu_temp, 1, "°C", LIMITS.pi.cpu_temp)],
+    ["CPU-Last", n => num(n.cpu_percent, 0, "%", LIMITS.pi.cpu_percent)],
+    ["Speicher", n => num(n.mem_percent, 0, "%", LIMITS.pi.mem_percent)],
+    ["SD-Karte", n => num(n.disk_percent, 0, "%", LIMITS.pi.disk_percent)],
     ["Laufzeit", n => up(n.uptime_s)],
   ];
   const head = nodes.map(n => `<th class="text-center" style="color:${PI_COLORS[n.name] || "#0d6efd"}">${escapeHtml(n.name)}</th>`).join("");
@@ -82,14 +152,14 @@ function piStatusHtml() {
 
 function vitalsStatusHtml() {
   const list = vitalsData.tasters || [];
-  const num = (v, dec, unit) => (v === null || v === undefined) ? "–" : `${Number(v).toFixed(dec)} ${unit}`;
+  const num = (v, dec, unit, rule) => (v === null || v === undefined) ? "–" : levelHtml(`${Number(v).toFixed(dec)} ${unit}`, limitLevel(v, rule));
   const rows = [
     ["Status", t => t.online ? '<span class="badge text-bg-success">online</span>' : '<span class="badge text-bg-secondary">offline</span>'],
-    ["Akku", t => num(t.battery, 0, "%")],
-    ["Spannung", t => num(t.vbat, 2, "V")],
-    ["Temperatur", t => num(t.temp, 1, "°C")],
-    ["Luftfeuchte", t => num(t.humidity, 0, "%")],
-    ["WLAN", t => num(t.rssi, 0, "dBm")],
+    ["Akku", t => num(t.battery, 0, "%", LIMITS.taster.battery)],
+    ["Spannung", t => num(t.vbat, 2, "V", LIMITS.taster.vbat)],
+    ["Temperatur", t => num(t.temp, 1, "°C", LIMITS.taster.temp)],
+    ["Luftfeuchte", t => num(t.humidity, 0, "%", LIMITS.taster.humidity)],
+    ["WLAN", t => num(t.rssi, 0, "dBm", LIMITS.taster.rssi)],
   ];
   if (!list.length) return '<span class="text-muted small">Noch kein Taster angemeldet.</span>';
   const head = list.map((t, i) => `<th class="text-center" style="color:${TASTER_COLORS[i % TASTER_COLORS.length]}">${escapeHtml(t.letter || "?")}</th>`).join("");
@@ -122,6 +192,11 @@ async function refreshCharger() {
   if (vitalsData && byId("vitals").classList.contains("active")) drawVitals();
 }
 
+async function refreshAllAlerts() {
+  await refreshCharger().catch(() => {});
+  await refreshSensorAlerts().catch(() => {});
+}
+
 function chargerStatusHtml() {
   if (!chargerData || !chargerData.known) return "";
   const s = chargerData.status, slots = {};
@@ -138,7 +213,9 @@ function chargerStatusHtml() {
     nums.map(n => `<td class="text-center text-nowrap">${f(slots[n])}</td>`).join("")}</tr>`).join("");
   const [cls, label] = CHARGER_STATE[chargerData.state] || CHARGER_STATE.offline;
   const msgs = chargerData.messages.map(m => `<div class="small text-${CHARGER_LEVEL[m.level]}">${escapeHtml(m.text)}</div>`).join("");
-  const info = `Temperatur ${num(s.temp, 1, "°C")} · Luftfeuchte ${num(s.humidity, 0, "%")} · WLAN ${num(s.rssi, 0, "dBm")} · Firmware ${escapeHtml(s.fw || "–")}`;
+  const lim = LIMITS.charger;
+  const colored = (v, dec, unit, rule) => levelHtml(num(v, dec, unit), limitLevel(v, rule));
+  const info = `Temperatur ${colored(s.temp, 1, "°C", lim.temp)} · Luftfeuchte ${colored(s.humidity, 0, "%", lim.humidity)} · WLAN ${colored(s.rssi, 0, "dBm", lim.rssi)} · Firmware ${escapeHtml(s.fw || "–")}`;
   return `<div class="mt-3"><strong class="small">Ladekoffer</strong> <span class="badge ${cls}">${label.replace("Ladekoffer: ", "")}</span>
     <div class="table-responsive mt-1"><table class="table table-sm align-middle mb-0"><thead><tr><th>Platz</th>${head}</tr></thead><tbody>${body}</tbody></table></div>
     <div class="small text-muted mt-1">${info}</div>${msgs}</div>`;
@@ -1145,8 +1222,8 @@ async function init() {
   // initial loads
   await refreshSystemStatus().catch(() => {});
   setInterval(() => refreshCluster().catch(() => {}), 10000);
-  refreshCharger().catch(() => {});
-  setInterval(() => refreshCharger().catch(() => {}), 10000);
+  refreshAllAlerts();
+  setInterval(refreshAllAlerts, 10000);
   await loadButtons().catch(() => {});
   renderTestButtons();
   await loadRunStatus().catch(() => {});

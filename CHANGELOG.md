@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.12.2 | 2026-10-30 | Oberfläche: Rote bzw. gelbe Balken oben auch für Taster, Pis und Messwerte des Ladekoffers (Akku, Spannung, Temperatur, Luftfeuchte, WLAN, CPU, Speicher, SD-Karte, Pi nicht erreichbar). In der Übersicht „Zustand“ werden Werte über bzw. unter den Grenzwerten gelb oder rot. Grenzwerte stehen in `LIMITS` in `backend/static/app.js`. |
 | v0.12.1 | 2026-10-30 | Repositories heißen jetzt `Stoppuhr-2.0-Stoppuhr`, `Stoppuhr-2.0-Taster` und `Stoppuhr-2.0-Ladekoffer`. Standard für `FIRMWARE_REPO` und die Klon-Adressen in der Doku angepasst. |
 | v0.12.0 | 2026-10-30 | Ladekoffer-Anbindung: Neue Schnittstellen `POST /api/charger` (offen, für die Ladeplatine) und `GET /api/charger`. Statusmeldungen (Fehler, Übertemperatur, fehlende oder ladende Taster, offline) in Kopfzeile, Meldungsleiste und Tab „Vitaldaten“. Neues Modul `ladekoffer.py` mit Tests. |
 | v0.11.3 | 2026-10-30 | Zwei-Pi-WLAN: Die Taster-Zugangspunkte sind fest auf 2,4 GHz eingestellt (Koffer Kanal 1, Bad Kanal 11). Neues Skript `wlan-kanal-setzen.sh` stellt auch vorhandene Installationen um; Kanäle 1, 6 oder 11 sind wählbar. Außerdem Syntaxfehler im Zwei-Pi-Installer behoben. |

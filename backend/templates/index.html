@@ -17,6 +17,9 @@
     .drop-target.drop-hover { border-color: #0d6efd; background-color: #e7f1ff; }
     .taster-assigned { font-size: .85rem; }
     .lane-inactive { opacity: .55; }
+    .val-danger { color: #dc3545; font-weight: 700; }
+    .val-warning { color: #b58100; font-weight: 600; }
+    .text-muted .val-danger, .text-muted .val-warning { color: inherit; font-weight: normal; }
   </style>
 </head>
 <body>
@@ -31,6 +34,7 @@
   </div>
 
   <div id="chargerAlerts"></div>
+  <div id="sensorAlerts"></div>
 
   <ul class="nav nav-tabs mb-3" id="mainTabs" role="tablist">
     <li class="nav-item" role="presentation">
