@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.16.1 | 2026-10-30 | Fehlerbehebung zu v0.16.0: Taster ohne Zuordnung bekamen keine Zuordnungsseite (Buchstabe und Akku) mehr, sondern zeigten „Bahn 0“. |
 | v0.16.0 | 2026-10-30 | Funktest (Reichweite): In den Einstellungen Tasterbuchstaben eingeben und „Funktest starten“. Der Taster (Firmware ab v0.15.0) wechselt ins Bad-WLAN, zeigt die Signalstärke in dBm (grün/gelb/rot nach den Grenzwerten „Taster: WLAN-Signal“) und piept bei kritischem Signal. Tastendrücke dieses Tasters werden währenddessen ignoriert. |
 | v0.15.0 | 2026-10-30 | Neue Einstellungen für die Taster-Akkuwarnung: „Akku-Warnung ab (%)“ (Standard 10, 0 = aus) und „automatisch ausschalten nach (Minuten)“ (Standard 5, 0 = nie). Die Werte gehen über `/api/display` an die Taster (Firmware ab v0.14.0). |
 | v0.14.2 | 2026-10-30 | „Starter ist auch Zieleinlauf“ als Kontrollkästchen direkt unter der Starter-Zeile auf der Startseite (wirkt sofort, ohne Speichern). |

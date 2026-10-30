@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.16.0
+# Version: v0.16.1
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.16.0"
+APP_VERSION: Final[str] = "0.16.1"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -1857,6 +1857,7 @@ def api_get_display():
         out["rssi_warn"] = int(warn)
         out["rssi_crit"] = int(crit)
         return jsonify(out)
+    if lane is None:
         pending_lane = next(
             (k for k, v in ((st.get("assignments") or {}).get("pending") or {}).items() if v == mac),
             None,
