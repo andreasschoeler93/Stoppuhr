@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.13.4 | 2026-10-30 | Zieleinlauf-Übertragen legt bei jedem Klick eine **neue** Unterversion an (5/2, 5/3, …). Bahnen ohne zugeordnete Zieleinlauf-Zeit übernehmen ihre normal gestoppte Zeit. „Letzte Version zurücknehmen“ entfernt die jeweils neueste. |
 | v0.13.3 | 2026-10-30 | Zieleinlauf dynamischer: zugeordnete Zeiten (auch automatisch vorsortierte) lassen sich per Drag & Drop auf andere Bahnen ziehen oder in den Bereich „Geparkte Zeiten“ zurückziehen („✕“ parkt ebenfalls). Eine überschriebene Zeit wandert in den Parkplatz. Geparkte Zeiten werden nicht automatisch zugeordnet. |
 | v0.13.2 | 2026-10-30 | Zieleinlauf: schnelle Druckfolge möglich (Entprellung 50 ms). Zugeordnete Zeiten dienen nur dem Vergleich; der Button unter der Tabelle überträgt alle zugeordneten Zeiten als neue Laufversion (z. B. 5/2) an JAuswertung, erneutes Übertragen aktualisiert sie, „Version zurücknehmen“ entfernt sie. Neu: `POST /api/finish/transfer`. |
 | v0.13.1 | 2026-10-30 | Anzeige für den Zieleinlauf-Taster (`role: "finish"` mit Liste in `/api/display`). |

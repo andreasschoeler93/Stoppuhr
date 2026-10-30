@@ -965,19 +965,16 @@ function updateFinishUi(runKey, run) {
       + (free.length ? "" : `<span class="small text-muted">keine</span>`)
     : "");
 
-  // Übertragen: alle zugeordneten Zeiten als neue Laufversion (z. B. 5/2) an die Auswertung
+  // Übertragen: jedes Mal eine neue Laufversion (z. B. 5/2, 5/3); nicht zugeordnete Bahnen behalten ihre gestoppte Zeit
   const matches = fin ? Object.entries(fin.matches) : [];
+  const versions = run.adopted || [];
   let transfer = "";
-  if (matches.length) {
-    const adopted = run.adopted;
-    const upToDate = adopted && matches.length === Object.keys(adopted.lanes).length
-      && matches.every(([lane, m]) => adopted.lanes[lane] === fin.times_ms[m.index]);
-    transfer = `<button type="button" class="btn btn-sm ${upToDate ? "btn-outline-success" : "btn-primary"} btn-finish-transfer">`
-      + (adopted ? (upToDate ? `✓ Übertragen als ${escapeHtml(adopted.label)}` : `Zieleinlauf-Zeiten aktualisieren (${escapeHtml(adopted.label)})`)
-                 : "Zieleinlauf-Zeiten als neue Laufversion übertragen")
-      + `</button>`
-      + (adopted ? ` <button type="button" class="btn btn-sm btn-outline-secondary btn-finish-undo">Version zurücknehmen</button>` : "")
-      + `<span class="small text-muted ms-2">${matches.length} Bahn(en) zugeordnet</span>`;
+  if (matches.length || versions.length) {
+    transfer = `<button type="button" class="btn btn-sm btn-primary btn-finish-transfer"${matches.length ? "" : " disabled"}>`
+      + `Als neue Laufversion übertragen</button>`
+      + (versions.length ? ` <button type="button" class="btn btn-sm btn-outline-secondary btn-finish-undo">Letzte Version zurücknehmen</button>` : "")
+      + `<span class="small text-muted ms-2">${matches.length} Bahn(en) zugeordnet, übrige mit gestoppter Zeit`
+      + (versions.length ? ` · übertragen: ${versions.map(v => escapeHtml(v.label)).join(", ")}` : "") + `</span>`;
   }
   const box = byId("finishTransfer");
   box.dataset.runKey = runKey || "";

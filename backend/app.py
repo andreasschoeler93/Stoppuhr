@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.13.3
+# Version: v0.13.4
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.13.3"
+APP_VERSION: Final[str] = "0.13.4"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -226,6 +226,14 @@ def _attempt_key(run: int, attempt: int) -> str:
     return str(run) if attempt == 1 else f"{run}/{attempt}"
 
 
+def _adopted_versions(st: State, run_key: str) -> list[dict[str, Any]]:
+    """Uebertragene Zieleinlauf-Versionen eines Versuchs (alter Stand v0.13.2: einzelnes Dict)."""
+    value = (st.get("finish_adopted") or {}).get(run_key)
+    if isinstance(value, dict):
+        return [value]
+    return list(value or [])
+
+
 def _next_attempt(st: State, run: int) -> int:
     attempts = [
         attempt
@@ -235,10 +243,10 @@ def _next_attempt(st: State, run: int) -> int:
         if existing_run == run
     ]
     # Unterversionen aus uebernommenen Zieleinlauf-Zeiten sind ebenfalls vergeben
-    for key, entry in (st.get("finish_adopted") or {}).items():
+    for key in (st.get("finish_adopted") or {}):
         parsed = _parse_attempt_key(key)
         if parsed is not None and parsed[0] == run:
-            attempts.append(int(entry["attempt"]))
+            attempts.extend(int(entry["attempt"]) for entry in _adopted_versions(st, key))
     return max(attempts, default=0) + 1
 
 
@@ -1549,10 +1557,11 @@ def api_post_finish_assign():
 @app.post("/api/finish/transfer")
 def api_post_finish_transfer():
     """
-    Uebertraegt alle zugeordneten Zieleinlauf-Zeiten eines Versuchs als neue Laufversion (z. B. 5/2).
+    Uebertraegt die Zieleinlauf-Zeiten eines Versuchs als NEUE Laufversion (z. B. 5/2, beim naechsten Mal 5/3).
 
+    Bahnen mit zugeordneter Zieleinlauf-Zeit bekommen diese, alle anderen Bahnen ihre normal gestoppte Zeit.
     Die Version geht in die Ergebnisdatei fuer JAuswertung; die Bahnzeiten des Versuchs bleiben unveraendert.
-    Erneutes Uebertragen aktualisiert dieselbe Version. Payload: { "run_key", "undo": true (= Version zuruecknehmen) }
+    Payload: { "run_key", "undo": true (= zuletzt uebertragene Version zuruecknehmen) }
     """
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
@@ -1561,23 +1570,32 @@ def api_post_finish_transfer():
     if parsed is None:
         return jsonify({"ok": False, "error": "missing run_key"}), 400
     adopted_all = st.setdefault("finish_adopted", {})
+    versions = _adopted_versions(st, run_key)
+    adopted_all[run_key] = versions
 
     if payload.get("undo"):
-        adopted_all.pop(run_key, None)
+        if versions:
+            versions.pop()
     else:
         info = _finish_info(st, run_key)
-        lanes = {
-            lane: info["times_ms"][m["index"]] for lane, m in ((info or {}).get("matches") or {}).items()
-        }
-        if not lanes:
+        matches = (info or {}).get("matches") or {}
+        if not matches:
             return jsonify({"ok": False, "error": "Keine Zieleinlauf-Zeit einer Bahn zugeordnet."}), 400
-        entry = adopted_all.get(run_key)
-        attempt = entry["attempt"] if entry else _next_attempt(st, parsed[0])
-        adopted_all[run_key] = {"attempt": attempt, "lanes": lanes}
+        presses = (st.get("triggers_per_run") or {}).get(run_key) or {}
+        starter_ts = int(presses[STARTER_KEY]["ts"])
+        lanes = {
+            str(lane): int(p["ts"]) - starter_ts
+            for lane, p in presses.items()
+            if lane != STARTER_KEY and p
+        }
+        for lane, m in matches.items():
+            lanes[lane] = info["times_ms"][m["index"]]
+        versions.append({"attempt": _next_attempt(st, parsed[0]), "lanes": lanes, "assigned": sorted(matches)})
+    if not versions:
+        adopted_all.pop(run_key, None)
     save_state(st)
     _write_heats_xml(st)
-    entry = adopted_all.get(run_key)
-    return jsonify({"ok": True, "label": _attempt_key(parsed[0], entry["attempt"]) if entry else None})
+    return jsonify({"ok": True, "label": _attempt_key(parsed[0], versions[-1]["attempt"]) if versions else None})
 
 
 @app.post("/api/triggers")
@@ -1900,7 +1918,7 @@ def api_get_run_status():
                 if lane == STARTER_KEY or not press:
                     continue
                 times[str(lane)] = press["ts"] - starter_ts
-        adopted = (st.get("finish_adopted") or {}).get(run_key)
+        adopted = _adopted_versions(st, run_key)
         runs[str(run_key)] = {
             "started": starter_ts is not None,
             "starter_ts": starter_ts,
@@ -1908,13 +1926,10 @@ def api_get_run_status():
             "running": starter_ts is not None and run_key == current_key and st.get("run_finished_ts") is None,
             "stopped_by_starter": run_key in stopped_keys,
             "finish": _finish_info(st, run_key),
-            "adopted": (
-                {
-                    "label": _attempt_key(_parse_attempt_key(run_key)[0], adopted["attempt"]),
-                    "lanes": adopted["lanes"],
-                }
-                if adopted and _parse_attempt_key(run_key) else None
-            ),
+            "adopted": [
+                {"label": _attempt_key(_parse_attempt_key(run_key)[0], v["attempt"]), "lanes": v["lanes"]}
+                for v in adopted
+            ] if _parse_attempt_key(run_key) else [],
         }
     finished = st.get("run_finished_ts")
     next_in = None
@@ -2066,12 +2081,16 @@ def _heats_for_xml(st: State) -> list[tuple[int, int, dict[int, int]]]:
         if (run > current or run_key == current_key) and not expected <= set(lane_times):
             continue
         heats.append((run, attempt, lane_times))
-    # Uebernommene Zieleinlauf-Zeiten: eigene Unterversion des Laufs, nur mit den uebernommenen Bahnen
-    for run_key, entry in (st.get("finish_adopted") or {}).items():
+    # Uebernommene Zieleinlauf-Zeiten: je Uebertragung eine eigene Unterversion des Laufs
+    for run_key in (st.get("finish_adopted") or {}):
         parsed = _parse_attempt_key(run_key)
-        if parsed is None or parsed[0] not in event_of or not entry.get("lanes"):
+        if parsed is None or parsed[0] not in event_of:
             continue
-        heats.append((parsed[0], int(entry["attempt"]), {int(lane): int(ms) for lane, ms in entry["lanes"].items()}))
+        for entry in _adopted_versions(st, run_key):
+            if entry.get("lanes"):
+                heats.append(
+                    (parsed[0], int(entry["attempt"]), {int(lane): int(ms) for lane, ms in entry["lanes"].items()})
+                )
     return sorted(heats, key=lambda heat: (heat[0], heat[1]))
 
 
