@@ -95,8 +95,13 @@ function sensorAlerts(tasters, piNodes) {
     const level = limitLevel(value, rule);
     push(level, `${who}: ${label} ${word(level)} (${Number(value).toFixed(dec)} ${unit}).`);
   };
-  tasters.filter(t => t.online).forEach(t => {
+  tasters.forEach(t => {
     const who = `Taster ${t.letter || "?"}`, lim = LIMITS.taster;
+    if (!t.online) {
+      // Nur Taster mit Rolle (Starter oder Bahn) sind im Betrieb gebraucht; freie Taster dürfen im Koffer liegen
+      if (t.roleText) push("danger", `${who} (${t.roleText}) ist offline.`);
+      return;
+    }
     check(who, t.battery, lim.battery, "Akku", 0, "%");
     check(who, t.vbat, lim.vbat, "Akkuspannung", 2, "V");
     check(who, t.temp, lim.temp, "Temperatur", 1, "°C");
@@ -121,11 +126,17 @@ function sensorAlerts(tasters, piNodes) {
 }
 
 async function refreshSensorAlerts() {
-  const [list, pi] = await Promise.all([
-    apiGet("/api/taster").catch(() => ({ tasters: [] })),
+  const [map, pi] = await Promise.all([
+    apiGet("/api/mapping").catch(() => ({})),
     apiGet("/api/vitals/pi?hours=1").catch(() => ({ nodes: [] })),
   ]);
-  const alerts = sensorAlerts(list.tasters || [], pi.nodes || []);
+  const tasters = [];
+  if (map.starter) tasters.push({ ...map.starter, roleText: "Starter" });
+  Object.keys(map.mapping || {}).forEach(lane => {
+    if (map.mapping[lane]) tasters.push({ ...map.mapping[lane], roleText: `Bahn ${lane}` });
+  });
+  (map.unmapped_taster || []).forEach(t => tasters.push(t));
+  const alerts = sensorAlerts(tasters, pi.nodes || []);
   byId("sensorAlerts").innerHTML = alerts
     .map(a => `<div class="alert alert-${a.level} py-1 px-2 small mb-2">${escapeHtml(a.text)}</div>`).join("");
 }
