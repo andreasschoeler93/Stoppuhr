@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.12.6
+# Version: v0.13.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -33,15 +33,18 @@ import limits as limits_module
 import node_info
 import pi_update
 import vitals_history
+import finish as finish_module
 import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.12.6"
+APP_VERSION: Final[str] = "0.13.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
+FINISH_KEY: Final[str] = finish_module.FINISH_KEY
+STARTER_STOP_MIN_MS: Final[int] = 1500  # Zweiter Starter-Druck davor gilt als Prellen
 CLOCK_OFFSET_MIN_MS: Final[int] = 250
 KEEP_HOURS_DEFAULT: Final[float] = 6.0
 HEATS_XML_PATH: Final[str] = os.environ.get("HEATS_XML_PATH", "/app/results/heats.xml")
@@ -505,6 +508,9 @@ def api_end_competition() -> ResponseReturnValue:
     st["assignments"] = {"mapping": {}, "pending": {}, "last_update_ts": None}
     st["startcards_per_run"] = {}
     st["triggers_per_run"] = {}
+    st["finish_per_run"] = {}
+    st["finish_assign"] = {}
+    st["stopped_by_starter"] = []
     st["clock_offsets"] = {}
     st["current_run"] = 1
     st["current_attempt"] = 1
@@ -570,6 +576,7 @@ def get_mapping():
         for lane in range(1, max_lane + 1)
     }
     starter_taster = mac_to_taster.get(current_mapping.get(STARTER_KEY))
+    finish_taster = mac_to_taster.get(current_mapping.get(FINISH_KEY))
 
     # Get the set of MAC addresses that are already assigned to a lane
     mapped_macs = set(current_mapping.values())
@@ -586,6 +593,7 @@ def get_mapping():
         {
             "mapping": full_mapping,
             "starter": starter_taster,
+            "finish": finish_taster,
             "unmapped_taster": unmapped_tasters,
         }
     )
@@ -1438,6 +1446,93 @@ def _lane_for_mac(st: State, mac: str) -> Optional[str]:
     return None
 
 
+def _record_finish_press(st: State, run_key: str, mac: str, ts: int) -> ResponseReturnValue:
+    """Sammelt einen Druck des Zieleinlauf-Tasters; ohne gestarteten Lauf wird er ignoriert."""
+    presses = (st.get("triggers_per_run") or {}).get(run_key) or {}
+    if not presses.get(STARTER_KEY):
+        return jsonify({"ok": True, "ignored": True, "reason": "not_started"})
+    collected = st.setdefault("finish_per_run", {}).setdefault(run_key, [])
+    if collected and ts - int(collected[-1]["ts"]) < finish_module.DEBOUNCE_MS:
+        return jsonify({"ok": True, "ignored": True, "reason": "debounce"})
+    collected.append({"ts": ts, "mac": mac})
+    save_state(st)
+    return jsonify({"ok": True, "finish": True, "index": len(collected) - 1, "run_key": run_key})
+
+
+def _finish_info(st: State, run_key: str) -> Optional[dict[str, Any]]:
+    """Zieleinlauf-Zeiten eines Versuchs samt Zuordnung zu den Bahnen (None ohne Druecke)."""
+    collected = (st.get("finish_per_run") or {}).get(run_key) or []
+    presses = (st.get("triggers_per_run") or {}).get(run_key) or {}
+    starter = presses.get(STARTER_KEY)
+    if not collected or not starter:
+        return None
+    starter_ts = int(starter["ts"])
+    times = finish_module.finish_times(starter_ts, collected)
+    manual = dict(((st.get("finish_assign") or {}).get(run_key) or {}))
+    lane_times = {
+        str(lane): int(p["ts"]) - starter_ts
+        for lane, p in presses.items()
+        if lane != STARTER_KEY and p and p.get("src") != FINISH_KEY
+    }
+    matches = finish_module.match(lane_times, times, manual)
+    return {
+        "times_ms": times,
+        "matches": matches,
+        "unassigned": finish_module.unassigned(times, matches),
+    }
+
+
+@app.post("/api/finish/assign")
+def api_post_finish_assign():
+    """
+    Ordnet einen Zieleinlauf-Druck haendlich einer Bahn zu (index) oder hebt die Zuordnung auf (index = null).
+
+    Hat die Bahn keine eigene Zeit, wird die Zieleinlauf-Zeit als Bahnzeit uebernommen.
+    Payload: { "run_key": "3", "lane": "2", "index": 0 | null }
+    """
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    run_key = str(payload.get("run_key") or "")
+    lane = str(payload.get("lane") or "")
+    index = payload.get("index")
+    if not run_key or not lane.isdigit():
+        return jsonify({"ok": False, "error": "missing run_key or lane"}), 400
+    collected = (st.get("finish_per_run") or {}).get(run_key) or []
+    all_presses = st.setdefault("triggers_per_run", {})
+    presses = all_presses.get(run_key) or {}
+    manual = st.setdefault("finish_assign", {}).setdefault(run_key, {})
+    current = presses.get(lane)
+
+    if index is None:
+        manual.pop(lane, None)
+        if current and current.get("src") == FINISH_KEY:
+            del presses[lane]
+    else:
+        if not isinstance(index, int) or not 0 <= index < len(collected):
+            return jsonify({"ok": False, "error": "invalid index"}), 400
+        for other, value in list(manual.items()):
+            if value == index:
+                del manual[other]
+                other_press = presses.get(other)
+                if other_press and other_press.get("src") == FINISH_KEY:
+                    del presses[other]
+        manual[lane] = index
+        if not presses.get(STARTER_KEY):
+            return jsonify({"ok": False, "error": "Lauf wurde nicht gestartet."}), 400
+        if current is None or current.get("src") == FINISH_KEY:
+            presses[lane] = {"ts": int(collected[index]["ts"]), "mac": FINISH_KEY, "src": FINISH_KEY}
+            all_presses[run_key] = presses
+
+    lanes_in_run = [c["Bahn"] for c in (st.get("startcards_per_run") or {}).get(run_key.split("/")[0], [])]
+    if run_key == _attempt_key(int(st.get("current_run") or 0), int(st.get("current_attempt") or 1)):
+        if lanes_in_run and not (set(lanes_in_run) - {k for k, v in presses.items() if v}):
+            if st.get("run_finished_ts") is None:
+                st["run_finished_ts"] = now_ms()
+    save_state(st)
+    _write_heats_xml(st)
+    return jsonify({"ok": True})
+
+
 @app.post("/api/triggers")
 def api_post_triggers():
     """
@@ -1490,6 +1585,9 @@ def api_post_triggers():
             return jsonify({"ok": True, "swapped": True, "lane": swapped})
         return jsonify({"ok": False, "error": f"no lane found for mac {mac_norm}"}), 400
 
+    if lane == FINISH_KEY:
+        return _record_finish_press(st, current_key, mac_norm, ts_val)
+
     if lane == STARTER_KEY:
         locked_until = int(st.get("start_locked_until_ms", 0) or 0)
         if now_ms() < locked_until:
@@ -1512,6 +1610,19 @@ def api_post_triggers():
     lanes_in_run = [v["Bahn"] for v in st.get("startcards_per_run", {}).get(str(current_run), [])]
     triggers_per_run = st.get("triggers_per_run") or {}
     triggers_per_run.setdefault(current_key, {})
+    # Zweiter Starter-Druck bei laufender Uhr: Lauf beenden (Bahnen ohne Zeit bleiben leer)
+    first_start = triggers_per_run[current_key].get(STARTER_KEY) if lane == STARTER_KEY else None
+    if first_start:
+        if ts_val - int(first_start["ts"]) < STARTER_STOP_MIN_MS:
+            return jsonify({"ok": True, "ignored": True, "reason": "double_press_too_fast"})
+        stopped = set(st.get("stopped_by_starter") or [])
+        stopped.add(current_key)
+        st["stopped_by_starter"] = sorted(stopped)
+        st["run_finished_ts"] = now_ms()
+        save_state(st)
+        _write_heats_xml(st)
+        logger.info(f"Run {current_key} stopped by second starter press")
+        return jsonify({"ok": True, "stopped": True, "run_key": current_key})
     triggers_per_run[current_key].setdefault(lane, None)
     # Abort press if the run has not been started yet.
     if lane != STARTER_KEY and not any(
@@ -1630,6 +1741,8 @@ def api_get_display():
         return jsonify(out)
 
     previous_attempts = []
+    if lane == FINISH_KEY:
+        return jsonify(out)
     for key, previous_presses in all_presses.items():
         parsed = _parse_attempt_key(key)
         if parsed is None or not previous_presses or key == run_key:
@@ -1653,7 +1766,7 @@ def api_get_display():
             if t is not None:
                 parts.append(f"{ln},s,{t}")
             else:
-                parts.append(f"{ln},{'r' if starter else 'w'},-1")
+                parts.append(f"{ln},{'r' if starter and not finished else 'w'},-1")
         out["lanes"] = ";".join(parts)
         if starter:
             if finished:
@@ -1684,7 +1797,7 @@ def api_get_display():
         stopped = _lane_time(presses, str(lane))
         if stopped is not None:
             out["state"], out["time_ms"] = "stopped", stopped
-        elif starter:
+        elif starter and not finished:
             out["state"] = "running"
             out["elapsed_ms"] = max(0, now - int(starter["ts"]))
     for _, previous_run, previous_attempt, previous_presses in previous_attempts:
@@ -1705,6 +1818,10 @@ def api_get_run_status():
     st = load_state()
     _maybe_advance_run(st)
     runs: dict[str, Any] = {}
+    current_run = int(st.get("current_run") or 0)
+    current_attempt = int(st.get("current_attempt") or 1)
+    current_key = _attempt_key(current_run, current_attempt)
+    stopped_keys = set(st.get("stopped_by_starter") or [])
     for run_key, presses in (st.get("triggers_per_run") or {}).items():
         starter = (presses or {}).get(STARTER_KEY)
         starter_ts = starter.get("ts") if starter else None
@@ -1714,7 +1831,14 @@ def api_get_run_status():
                 if lane == STARTER_KEY or not press:
                     continue
                 times[str(lane)] = press["ts"] - starter_ts
-        runs[str(run_key)] = {"started": starter_ts is not None, "starter_ts": starter_ts, "times_ms": times}
+        runs[str(run_key)] = {
+            "started": starter_ts is not None,
+            "starter_ts": starter_ts,
+            "times_ms": times,
+            "running": starter_ts is not None and run_key == current_key and st.get("run_finished_ts") is None,
+            "stopped_by_starter": run_key in stopped_keys,
+            "finish": _finish_info(st, run_key),
+        }
     finished = st.get("run_finished_ts")
     next_in = None
     if finished is not None:
@@ -1722,9 +1846,6 @@ def api_get_run_status():
     lockout_remaining = max(
         0, int(st.get("start_locked_until_ms", 0) or 0) - now_ms()
     ) / 1000
-    current_run = int(st.get("current_run") or 0)
-    current_attempt = int(st.get("current_attempt") or 1)
-    current_key = _attempt_key(current_run, current_attempt)
     return jsonify(
         {
             "current_run": current_run,
@@ -1825,6 +1946,9 @@ def api_test_reset_run():
     attempt = int(st.get("current_attempt") or 1)
     run_key = _attempt_key(run, attempt)
     (st.get("triggers_per_run") or {}).pop(run_key, None)
+    (st.get("finish_per_run") or {}).pop(run_key, None)
+    (st.get("finish_assign") or {}).pop(run_key, None)
+    st["stopped_by_starter"] = [k for k in (st.get("stopped_by_starter") or []) if k != run_key]
     st["run_finished_ts"] = None
     save_state(st)
     return jsonify({"ok": True, "run": run_key})

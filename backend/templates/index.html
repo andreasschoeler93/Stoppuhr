@@ -15,6 +15,9 @@
     .taster-badge { display:inline-block; padding:.1rem .35rem; border-radius:999px; font-size:.75rem; background:#e9ecef; }
     .drop-target { border: 2px dashed transparent; border-radius: .4rem; min-height: 2rem; padding: .2rem .3rem; }
     .drop-target.drop-hover { border-color: #0d6efd; background-color: #e7f1ff; }
+    .finish-chip { display: inline-block; cursor: grab; border: 1px solid #6c757d; border-radius: .4rem; padding: .1rem .5rem; margin: 0 .3rem .3rem 0; background: #fff; }
+    .finish-cell { border: 2px dashed transparent; }
+    .finish-cell.drop-hover { border-color: #0d6efd; background-color: #e7f1ff; }
     .taster-assigned { font-size: .85rem; }
     .lane-inactive { opacity: .55; }
     .val-danger { color: #dc3545; font-weight: 700; }
@@ -122,6 +125,12 @@
                 <div id="starterDrop" class="drop-target flex-grow-1" data-lane="starter"></div>
                 <button class="btn btn-sm btn-outline-secondary" id="btnClearStarter">Entfernen</button>
               </div>
+              <div class="d-flex align-items-center mb-2 gap-2">
+                <strong>Zieleinlauf:</strong>
+                <div id="finishDrop" class="drop-target flex-grow-1" data-lane="ziel"></div>
+                <button class="btn btn-sm btn-outline-secondary" id="btnClearFinish">Entfernen</button>
+              </div>
+              <div id="runNotice"></div>
               <div class="table-responsive">
                 <table class="table table-sm table-striped align-middle">
                   <thead>
@@ -132,11 +141,13 @@
                       <th>Disziplin</th>
                       <th style="width:22%">Taster</th>
                       <th style="width:12%">Zeit</th>
+                      <th style="width:16%">Zieleinlauf</th>
                     </tr>
                   </thead>
                   <tbody id="bahnenTableBody"></tbody>
                 </table>
               </div>
+              <div id="finishPool" class="mb-2"></div>
               <div class="text-muted small" id="bahnenFooter"></div>
 
               <!-- TESTBEREICH: kann spaeter entfernt werden -->

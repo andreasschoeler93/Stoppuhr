@@ -1,4 +1,4 @@
-# Stoppuhr – Pi-Software (v0.12.6)
+# Stoppuhr – Pi-Software (v0.13.0)
 
 Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
 liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
@@ -80,6 +80,13 @@ Gespeicherte Zeiten bleiben; Versionen werden getrennt nummeriert (z. B. `5/2`) 
 ### Taster-Anzeige
 
 `GET /api/display` liefert Namen und Disziplinen als UTF-8 mit Umlauten; die Firmware stellt `ä ö ü Ä Ö Ü` korrekt dar.
+
+### Zieleinlauf und Abbruch durch den Starter (ab v0.13.0)
+
+- **Zieleinlauf-Taster** (optional): wie den Starter per Drag & Drop auf „Zieleinlauf“ ziehen. Jeder Druck nach dem Start wird gesammelt; die **Bahnzeit bleibt die Hauptzeit**.
+- Die gesammelten Zeiten werden automatisch der nächstliegenden Bahnzeit zugeordnet (höchstens 3 s Abstand). In der Spalte „Zieleinlauf“ steht die Abweichung (Zieleinlauf minus Bahn, ab 0,5 s rot).
+- Nicht zugeordnete Zeiten erscheinen unter der Tabelle und lassen sich per Drag & Drop auf eine Bahn ziehen. Hat die Bahn keine eigene Zeit, wird die Zieleinlauf-Zeit als Bahnzeit übernommen. „✕“ hebt eine händische Zuordnung wieder auf.
+- **Zweiter Druck des Starters** bei laufender Uhr (frühestens 1,5 s nach dem Start) beendet den Lauf. Bahnen ohne Zeit bleiben leer; oben erscheint ein Hinweis.
 
 ## Einstellungen: WLAN, Zugang und Updates
 

@@ -201,6 +201,7 @@ async function refreshSensorAlerts() {
   ]);
   const tasters = [];
   if (map.starter) tasters.push({ ...map.starter, roleText: "Starter" });
+  if (map.finish) tasters.push({ ...map.finish, roleText: "Zieleinlauf" });
   Object.keys(map.mapping || {}).forEach(lane => {
     if (map.mapping[lane]) tasters.push({ ...map.mapping[lane], roleText: `Bahn ${lane}` });
   });
@@ -714,6 +715,7 @@ async function loadButtons() {
   const data = await apiGet("/api/mapping");
   const entries = [];
   if (data.starter) entries.push({ t: data.starter, role: "starter", lane: null });
+  if (data.finish) entries.push({ t: data.finish, role: "finish", lane: null });
   Object.keys(data.mapping || {}).forEach(lane => {
     if (data.mapping[lane]) entries.push({ t: data.mapping[lane], role: "bahn", lane });
   });
@@ -756,6 +758,7 @@ async function loadButtons() {
 
   renderButtonList();
   renderStarter();
+  renderFinishBox();
   renderLanesTable();
   byId("tasterLastRefresh").textContent = "Letzte Aktualisierung: " + new Date().toLocaleTimeString();
 }
@@ -807,9 +810,14 @@ function tasterLevel(btn, hasRole) {
   return levels.includes("danger") ? "danger" : levels.includes("warning") ? "warning" : "";
 }
 
+// Bahnnummer als Zahl, Rollen (starter, ziel) als Text
+function laneArg(lane) {
+  return /^\d+$/.test(String(lane)) ? Number(lane) : String(lane);
+}
+
 async function swapNow(lane, mac) {
   try {
-    await apiPost("/api/assign", { mac, lane: lane === "starter" ? "starter" : Number(lane), immediate: true });
+    await apiPost("/api/assign", { mac, lane: laneArg(lane), immediate: true });
     await loadButtons();
   } catch (e) {
     alert("Tausch fehlgeschlagen: " + e.message);
@@ -844,6 +852,21 @@ function renderStarter() {
   box.innerHTML = (s
     ? `<strong>Taster ${escapeHtml(s.letter || "?")}</strong> <span class="small text-muted">${escapeHtml(s.name)} · ${vitalsHtml(s)}</span>`
     : `<span class="text-muted small">kein Starter – Taster hierher ziehen</span>`) + pendingHtml;
+}
+
+function renderFinishBox() {
+  const box = byId("finishDrop");
+  const f = buttons.find(b => b.role === "finish");
+  const p = buttons.find(b => b.role === "none" && b.pending_lane === "ziel");
+  const pendingHtml = p
+    ? `<div class="small text-warning">Bereitschaft: Taster ${escapeHtml(p.letter || "?")} wird beim ersten Druck Zieleinlauf</div>${pendingActionsHtml("ziel", p.mac)}`
+    : "";
+  const lvl = tasterLevel(f, true);
+  box.classList.remove("lvl-danger", "lvl-warning");
+  if (lvl) box.classList.add("lvl-" + lvl);
+  box.innerHTML = (f
+    ? `<strong>Taster ${escapeHtml(f.letter || "?")}</strong> <span class="small text-muted">${escapeHtml(f.name)} · ${vitalsHtml(f)}</span>`
+    : `<span class="text-muted small">kein Zieleinlauf – Taster hierher ziehen (optional)</span>`) + pendingHtml;
 }
 
 // Messergebnisse des Servers (Zeiten je Lauf und Bahn)
@@ -899,14 +922,77 @@ function updateClocks() {
     if (stopped != null) {
       text = formatMs(stopped);
       cls += " fw-bold";
-    } else if (run.started && td.dataset.active === "1") {
+    } else if (run.running && td.dataset.active === "1") {
       text = formatMs(now - run.starter_ts);
       cls += " text-primary";
     }
     if (td.textContent !== text) td.textContent = text;
     td.className = cls;
   });
+  updateFinishUi(runKey, run);
 }
+
+function setHtmlIfChanged(el, html) {
+  if (el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+
+// Zieleinlauf: Zuordnung je Bahn, nicht zugeordnete Zeiten und Hinweis bei Abbruch durch den Starter
+function updateFinishUi(runKey, run) {
+  const fin = run.finish;
+  document.querySelectorAll(".finish-cell").forEach(td => {
+    const lane = td.dataset.lane;
+    const m = fin && fin.matches[lane];
+    let html = "";
+    if (m) {
+      const d = m.delta_ms;
+      const diff = d == null ? "als Bahnzeit übernommen" : (d >= 0 ? "+" : "−") + (Math.abs(d) / 1000).toFixed(2) + " s";
+      const cls = d == null ? "text-primary" : Math.abs(d) > 500 ? "text-danger" : "text-muted";
+      html = `${formatMs(fin.times_ms[m.index])} <span class="small ${cls}">(${diff})</span>`
+        + (m.manual ? ` <button type="button" class="btn btn-sm btn-link p-0 btn-finish-clear" data-lane="${escapeHtml(lane)}" title="Zuordnung aufheben">✕</button>` : "");
+    }
+    td.dataset.runKey = runKey || "";
+    setHtmlIfChanged(td, html);
+  });
+
+  const pool = byId("finishPool");
+  pool.dataset.runKey = runKey || "";
+  const free = fin ? fin.unassigned : [];
+  setHtmlIfChanged(pool, free.length
+    ? `<div class="small text-muted mb-1">Nicht zugeordnete Zieleinlauf-Zeiten – per Drag &amp; Drop auf eine Bahn ziehen:</div>`
+      + free.map(i => `<span class="finish-chip" draggable="true" data-index="${i}">${formatMs(fin.times_ms[i])}</span>`).join("")
+    : "");
+
+  let notice = "";
+  if (run.stopped_by_starter) {
+    const missing = [...document.querySelectorAll('.lane-time[data-active="1"]')]
+      .filter(td => (run.times_ms || {})[td.dataset.lane] == null).map(td => td.dataset.lane);
+    notice = `<div class="alert alert-warning py-1 px-2 small mb-2">Lauf ${escapeHtml(String(runKey))} wurde durch erneutes Drücken des Starters beendet.`
+      + (missing.length ? ` Keine Zeit: Bahn ${missing.join(", ")}.` : "") + `</div>`;
+  }
+  setHtmlIfChanged(byId("runNotice"), notice);
+}
+
+document.addEventListener("dragstart", ev => {
+  const chip = ev.target.closest && ev.target.closest(".finish-chip");
+  if (!chip) return;
+  ev.dataTransfer.setData("application/x-finish", JSON.stringify({ runKey: byId("finishPool").dataset.runKey, index: Number(chip.dataset.index) }));
+});
+
+async function assignFinish(runKey, lane, index) {
+  try {
+    await apiPost("/api/finish/assign", { run_key: runKey, lane: String(lane), index });
+    await loadRunStatus();
+  } catch (e) {
+    alert("Zuordnung fehlgeschlagen: " + e.message);
+  }
+}
+
+document.addEventListener("click", ev => {
+  const clear = ev.target.closest(".btn-finish-clear");
+  if (clear) assignFinish(clear.closest(".finish-cell").dataset.runKey, clear.dataset.lane, null);
+});
 
 function latestAttemptKeyForRun(run) {
   const runStr = String(run);
@@ -975,16 +1061,20 @@ function renderButtonList() {
       slotLabel = slotInfo.slot + (slotInfo.role.endsWith("pending") ? " (Bereitschaft)" : " (aktiv)");
     } else if (btn.role === "starter") {
       slotLabel = "STARTER (aktiv)";
+    } else if (btn.role === "finish") {
+      slotLabel = "ZIELEINLAUF (aktiv)";
     } else if (btn.pending_lane === "starter") {
       slotLabel = "STARTER (Bereitschaft)";
+    } else if (btn.pending_lane === "ziel") {
+      slotLabel = "ZIELEINLAUF (Bereitschaft)";
     }
 
     const letter = btn.letter || "?";
-    const assigned = btn.role === "starter" || (btn.role === "bahn" && btn.lane != null);
+    const assigned = btn.role === "starter" || btn.role === "finish" || (btn.role === "bahn" && btn.lane != null);
     const lvl = tasterLevel(btn, assigned);
     if (lvl) div.classList.add("lvl-" + lvl);
     const unassignHtml = assigned
-      ? `<button class="btn btn-sm btn-outline-secondary btn-unassign" data-lane="${btn.role === "starter" ? "starter" : escapeHtml(String(btn.lane))}">Entfernen</button>`
+      ? `<button class="btn btn-sm btn-outline-secondary btn-unassign" data-lane="${btn.role === "starter" ? "starter" : btn.role === "finish" ? "ziel" : escapeHtml(String(btn.lane))}">Entfernen</button>`
       : "";
     div.innerHTML = `
       <div class="taster-header">
@@ -1025,7 +1115,7 @@ function attachDropTargets() {
       // Zuordnung auf dem Server speichern, danach Serverstand neu laden
       const btn = findButtonById(btnId);
       if (btn && btn.mac) {
-        apiPost("/api/assign", { mac: btn.mac, lane: lane === "starter" ? "starter" : Number(lane) })
+        apiPost("/api/assign", { mac: btn.mac, lane: laneArg(lane) })
           .then(() => loadButtons())
           .catch(e => alert("Zuordnung speichern fehlgeschlagen: " + e.message));
       } else {
@@ -1108,7 +1198,22 @@ function renderLanesTable() {
       <td>${escapeHtml(disz)}</td>
       <td><div class="drop-target${laneLevel ? " lvl-" + laneLevel : ""}" data-lane="${b}">${tasterHtml}</div></td>
       <td class="lane-time" data-lane="${b}" data-active="${r ? 1 : 0}">–</td>
+      <td class="finish-cell small" data-lane="${b}"></td>
     `;
+    const finishCell = tr.querySelector(".finish-cell");
+    finishCell.addEventListener("dragover", ev => {
+      if (!ev.dataTransfer.types.includes("application/x-finish")) return;
+      ev.preventDefault();
+      finishCell.classList.add("drop-hover");
+    });
+    finishCell.addEventListener("dragleave", () => finishCell.classList.remove("drop-hover"));
+    finishCell.addEventListener("drop", ev => {
+      ev.preventDefault();
+      finishCell.classList.remove("drop-hover");
+      let data;
+      try { data = JSON.parse(ev.dataTransfer.getData("application/x-finish")); } catch (e) { return; }
+      if (data && data.runKey) assignFinish(data.runKey, b, data.index);
+    });
     tbody.appendChild(tr);
   }
 
@@ -1293,6 +1398,7 @@ async function init() {
   });
 
   byId("btnClearStarter").addEventListener("click", () => unassignLane("starter"));
+  byId("btnClearFinish").addEventListener("click", () => unassignLane("ziel"));
   byId("btnFwDeploy").addEventListener("click", deployFirmware);
   byId("btnPiDeploy").addEventListener("click", deployPi);
   byId("btnPiReload").addEventListener("click", () => refreshPiUpdate().catch(e => alert("Versionen laden fehlgeschlagen: " + e.message)));
