@@ -711,6 +711,33 @@ function vitalsText(btn) {
   return parts.join(" · ");
 }
 
+// Wie vitalsText, aber Werte über/unter den Grenzwerten sind gelb oder rot
+function vitalsHtml(btn) {
+  if (!btn || !btn.online) return "offline";
+  const lim = LIMITS.taster, parts = [];
+  if (btn.battery_percent != null) {
+    const bat = [limitLevel(btn.battery_percent, lim.battery), limitLevel(btn.vbat, lim.vbat)];
+    const level = bat.includes("danger") ? "danger" : bat.includes("warning") ? "warning" : null;
+    parts.push(levelHtml(escapeHtml(btn.battery_percent + "%" + (btn.vbat != null ? " (" + Number(btn.vbat).toFixed(2) + " V)" : "")), level));
+  }
+  if (btn.rssi_dbm != null) parts.push(levelHtml(escapeHtml(btn.rssi_dbm + " dBm"), limitLevel(btn.rssi_dbm, lim.rssi)));
+  if (btn.ssid) parts.push(escapeHtml(btn.ssid));
+  if (btn.temp != null) parts.push(levelHtml(escapeHtml(Number(btn.temp).toFixed(1) + " °C"), limitLevel(btn.temp, lim.temp)));
+  if (btn.humidity != null) parts.push(levelHtml(escapeHtml(Number(btn.humidity).toFixed(0) + " % rF"), limitLevel(btn.humidity, lim.humidity)));
+  return parts.join(" · ");
+}
+
+// Schlechtester Zustand eines Tasters: danger (rot), warning (gelb) oder "" (in Ordnung).
+// Offline ist nur bei einem Taster mit Rolle (Starter oder Bahn) ein Problem.
+function tasterLevel(btn, hasRole) {
+  if (!btn) return "";
+  if (!btn.online) return hasRole ? "danger" : "";
+  const lim = LIMITS.taster;
+  const levels = [limitLevel(btn.battery_percent, lim.battery), limitLevel(btn.vbat, lim.vbat),
+    limitLevel(btn.temp, lim.temp), limitLevel(btn.humidity, lim.humidity), limitLevel(btn.rssi_dbm, lim.rssi)];
+  return levels.includes("danger") ? "danger" : levels.includes("warning") ? "warning" : "";
+}
+
 async function swapNow(lane, mac) {
   try {
     await apiPost("/api/assign", { mac, lane: lane === "starter" ? "starter" : Number(lane), immediate: true });
@@ -742,8 +769,11 @@ function renderStarter() {
   const pendingHtml = p
     ? `<div class="small text-warning">Bereitschaft: Taster ${escapeHtml(p.letter || "?")} wird beim ersten Druck Starter</div>${pendingActionsHtml("starter", p.mac)}`
     : "";
+  const lvl = tasterLevel(s, true);
+  box.classList.remove("lvl-danger", "lvl-warning");
+  if (lvl) box.classList.add("lvl-" + lvl);
   box.innerHTML = (s
-    ? `<strong>Taster ${escapeHtml(s.letter || "?")}</strong> <span class="small text-muted">${escapeHtml(s.name)} · ${escapeHtml(vitalsText(s))}</span>`
+    ? `<strong>Taster ${escapeHtml(s.letter || "?")}</strong> <span class="small text-muted">${escapeHtml(s.name)} · ${vitalsHtml(s)}</span>`
     : `<span class="text-muted small">kein Starter – Taster hierher ziehen</span>`) + pendingHtml;
 }
 
@@ -880,6 +910,8 @@ function renderButtonList() {
 
     const letter = btn.letter || "?";
     const assigned = btn.role === "starter" || (btn.role === "bahn" && btn.lane != null);
+    const lvl = tasterLevel(btn, assigned);
+    if (lvl) div.classList.add("lvl-" + lvl);
     const unassignHtml = assigned
       ? `<button class="btn btn-sm btn-outline-secondary btn-unassign" data-lane="${btn.role === "starter" ? "starter" : escapeHtml(String(btn.lane))}">Entfernen</button>`
       : "";
@@ -891,7 +923,7 @@ function renderButtonList() {
       </div>
       <div class="taster-mac">${escapeHtml(btn.name ? btn.name + " · " + btn.mac : btn.mac)}</div>
       <div class="small mt-1 text-muted">
-        ${escapeHtml(vitalsText(btn))}
+        ${vitalsHtml(btn)}
       </div>
     `;
 
@@ -986,6 +1018,7 @@ function renderLanesTable() {
     const pendingBtn = assign.pending ? findButtonById(assign.pending) : null;
 
     let tasterHtml = `<span class="text-muted small">kein Taster</span>`;
+    let laneLevel = "";
     if (activeBtn || pendingBtn) {
       let main = activeBtn ? (activeBtn.letter || "?") : (pendingBtn.letter || "?");
       let extra = "";
@@ -993,7 +1026,8 @@ function renderLanesTable() {
         extra = ` <span class="text-warning">(Bereitschaft: ${escapeHtml(pendingBtn.letter || "?")})</span>${pendingActionsHtml(b, pendingBtn.mac)}`;
       }
       const shown = activeBtn || pendingBtn;
-      tasterHtml = `<div class="taster-assigned"><strong>Taster ${escapeHtml(main)}</strong>${extra}<div class="small text-muted">${escapeHtml(vitalsText(shown))}</div></div>`;
+      laneLevel = tasterLevel(shown, true);
+      tasterHtml = `<div class="taster-assigned"><strong>Taster ${escapeHtml(main)}</strong>${extra}<div class="small text-muted">${vitalsHtml(shown)}</div></div>`;
     }
 
     tr.innerHTML = `
@@ -1001,7 +1035,7 @@ function renderLanesTable() {
       <td>${escapeHtml(name)}</td>
       <td>${escapeHtml(startnr)}</td>
       <td>${escapeHtml(disz)}</td>
-      <td><div class="drop-target" data-lane="${b}">${tasterHtml}</div></td>
+      <td><div class="drop-target${laneLevel ? " lvl-" + laneLevel : ""}" data-lane="${b}">${tasterHtml}</div></td>
       <td class="lane-time" data-lane="${b}" data-active="${r ? 1 : 0}">–</td>
     `;
     tbody.appendChild(tr);

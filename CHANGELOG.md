@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.12.4 | 2026-10-30 | Oberfläche: Auf der Seite Stoppuhr werden Taster-Karten, Starter und Bahnen gelb oder rot hinterlegt, wenn ein Wert den Grenzwert erreicht oder ein Taster mit Rolle offline ist. Die einzelnen Werte sind ebenfalls farbig. |
 | v0.12.3 | 2026-10-30 | Oberfläche: Roter Balken oben, wenn ein Taster mit Rolle (Starter oder Bahn) offline ist. Taster ohne Rolle lösen keine Meldung aus. |
 | v0.12.2 | 2026-10-30 | Oberfläche: Rote bzw. gelbe Balken oben auch für Taster, Pis und Messwerte des Ladekoffers (Akku, Spannung, Temperatur, Luftfeuchte, WLAN, CPU, Speicher, SD-Karte, Pi nicht erreichbar). In der Übersicht „Zustand“ werden Werte über bzw. unter den Grenzwerten gelb oder rot. Grenzwerte stehen in `LIMITS` in `backend/static/app.js`. |
 | v0.12.1 | 2026-10-30 | Repositories heißen jetzt `Stoppuhr-2.0-Stoppuhr`, `Stoppuhr-2.0-Taster` und `Stoppuhr-2.0-Ladekoffer`. Standard für `FIRMWARE_REPO` und die Klon-Adressen in der Doku angepasst. |

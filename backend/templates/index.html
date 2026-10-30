@@ -19,7 +19,10 @@
     .lane-inactive { opacity: .55; }
     .val-danger { color: #dc3545; font-weight: 700; }
     .val-warning { color: #b58100; font-weight: 600; }
-    .text-muted .val-danger, .text-muted .val-warning { color: inherit; font-weight: normal; }
+    .lvl-danger, .taster-card.lvl-danger { background-color: #f8d7da; border-color: #dc3545; }
+    .lvl-warning, .taster-card.lvl-warning { background-color: #fff3cd; border-color: #ffc107; }
+    .lvl-danger .text-muted, .lvl-warning .text-muted { color: #495057 !important; }
+    td.text-muted .val-danger, td.text-muted .val-warning { color: inherit; font-weight: normal; }
   </style>
 </head>
 <body>
