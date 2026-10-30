@@ -1410,6 +1410,7 @@ async function init() {
         stop_lockout_s: byId("stopLockoutInput").value,
         shutdown_grace_s: byId("shutdownGraceInput").value,
         starter_is_finish: byId("starterIsFinishInput").checked
+      });
       // mirror to main tab
       await loadSettingsIntoUI();
       const msg = byId("settingsSavedMsg");

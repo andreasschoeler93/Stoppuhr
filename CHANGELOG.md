@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.14.1 | 2026-10-30 | Fix: Syntaxfehler in `app.js` aus v0.14.0 (Oberfläche blieb leer, keine Versionsanzeige). |
 | v0.14.0 | 2026-10-30 | Neu: einstellbarer Grenzwert „Zieleinlauf: Abweichung zur Bahnzeit“ (Einstellungen → Grenzwerte, Standard gelb ab 0,5 s, rot ab 1 s, je ±). Neu: Option „Starter / Zieleinlauf“ (Einstellungen): der Starter-Taster behält die Starteransicht, sammelt aber nach dem Start jeden weiteren Druck als Zieleinlauf-Zeit (der Doppeldruck-Stopp entfällt dann). |
 | v0.13.4 | 2026-10-30 | Zieleinlauf-Übertragen legt bei jedem Klick eine **neue** Unterversion an (5/2, 5/3, …). Bahnen ohne zugeordnete Zieleinlauf-Zeit übernehmen ihre normal gestoppte Zeit. „Letzte Version zurücknehmen“ entfernt die jeweils neueste. |
 | v0.13.3 | 2026-10-30 | Zieleinlauf dynamischer: zugeordnete Zeiten (auch automatisch vorsortierte) lassen sich per Drag & Drop auf andere Bahnen ziehen oder in den Bereich „Geparkte Zeiten“ zurückziehen („✕“ parkt ebenfalls). Eine überschriebene Zeit wandert in den Parkplatz. Geparkte Zeiten werden nicht automatisch zugeordnet. |
