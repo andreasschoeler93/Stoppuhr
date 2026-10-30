@@ -949,8 +949,8 @@ function updateFinishUi(runKey, run) {
       const d = m.delta_ms;
       const diff = d == null ? "ohne Bahnzeit" : (d >= 0 ? "+" : "−") + (Math.abs(d) / 1000).toFixed(2) + " s";
       const cls = d == null ? "text-primary" : Math.abs(d) > 500 ? "text-danger" : "text-muted";
-      html = `${formatMs(fin.times_ms[m.index])} <span class="small ${cls}">(${diff})</span>`
-        + (m.manual ? ` <button type="button" class="btn btn-sm btn-link p-0 btn-finish-clear" data-lane="${escapeHtml(lane)}" title="Zuordnung aufheben">✕</button>` : "");
+      html = `<span class="finish-chip" draggable="true" data-index="${m.index}" data-run-key="${escapeHtml(runKey || "")}">${formatMs(fin.times_ms[m.index])}</span> <span class="small ${cls}">(${diff})</span>`
+        + ` <button type="button" class="btn btn-sm btn-link p-0 btn-finish-clear" data-lane="${escapeHtml(lane)}" title="Zeit parken">✕</button>`;
     }
     td.dataset.runKey = runKey || "";
     setHtmlIfChanged(td, html);
@@ -959,9 +959,10 @@ function updateFinishUi(runKey, run) {
   const pool = byId("finishPool");
   pool.dataset.runKey = runKey || "";
   const free = fin ? fin.unassigned : [];
-  setHtmlIfChanged(pool, free.length
-    ? `<div class="small text-muted mb-1">Nicht zugeordnete Zieleinlauf-Zeiten – per Drag &amp; Drop auf die Spalte „Zieleinlauf“ einer Bahn ziehen:</div>`
-      + free.map(i => `<span class="finish-chip" draggable="true" data-index="${i}">${formatMs(fin.times_ms[i])}</span>`).join("")
+  setHtmlIfChanged(pool, fin
+    ? `<div class="small text-muted mb-1">Geparkte Zieleinlauf-Zeiten – per Drag &amp; Drop auf die Spalte „Zieleinlauf“ einer Bahn ziehen. Zugeordnete Zeiten lassen sich auf andere Bahnen oder hierher zurückziehen.</div>`
+      + free.map(i => `<span class="finish-chip" draggable="true" data-index="${i}" data-run-key="${escapeHtml(runKey || "")}">${formatMs(fin.times_ms[i])}</span>`).join("")
+      + (free.length ? "" : `<span class="small text-muted">keine</span>`)
     : "");
 
   // Übertragen: alle zugeordneten Zeiten als neue Laufversion (z. B. 5/2) an die Auswertung
@@ -995,8 +996,26 @@ function updateFinishUi(runKey, run) {
 document.addEventListener("dragstart", ev => {
   const chip = ev.target.closest && ev.target.closest(".finish-chip");
   if (!chip) return;
-  ev.dataTransfer.setData("application/x-finish", JSON.stringify({ runKey: byId("finishPool").dataset.runKey, index: Number(chip.dataset.index) }));
+  ev.dataTransfer.setData("application/x-finish", JSON.stringify({ runKey: chip.dataset.runKey, index: Number(chip.dataset.index) }));
 });
+
+// Der Bereich der geparkten Zeiten nimmt Zeiten zurück
+(function () {
+  const pool = byId("finishPool");
+  pool.addEventListener("dragover", ev => {
+    if (!ev.dataTransfer.types.includes("application/x-finish")) return;
+    ev.preventDefault();
+    pool.classList.add("drop-hover");
+  });
+  pool.addEventListener("dragleave", () => pool.classList.remove("drop-hover"));
+  pool.addEventListener("drop", ev => {
+    ev.preventDefault();
+    pool.classList.remove("drop-hover");
+    let data;
+    try { data = JSON.parse(ev.dataTransfer.getData("application/x-finish")); } catch (e) { return; }
+    if (data && data.runKey) assignFinish(data.runKey, "park", data.index);
+  });
+})();
 
 async function assignFinish(runKey, lane, index) {
   try {

@@ -30,6 +30,11 @@ class FinishTests(unittest.TestCase):
     def test_invalid_manual_index_ignored(self):
         self.assertEqual(finish.match({}, [1], {"1": 5}), {})
 
+    def test_parked_time_is_not_matched_automatically(self):
+        result = finish.match({"1": 10000}, [10020], {}, [0])
+        self.assertEqual(result, {})
+        self.assertEqual(finish.unassigned([10020], result), [0])
+
 
 if __name__ == "__main__":
     unittest.main()

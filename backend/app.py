@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.13.2
+# Version: v0.13.3
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.13.2"
+APP_VERSION: Final[str] = "0.13.3"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -515,6 +515,7 @@ def api_end_competition() -> ResponseReturnValue:
     st["triggers_per_run"] = {}
     st["finish_per_run"] = {}
     st["finish_assign"] = {}
+    st["finish_parked"] = {}
     st["finish_adopted"] = {}
     st["stopped_by_starter"] = []
     st["clock_offsets"] = {}
@@ -1480,7 +1481,9 @@ def _finish_info(st: State, run_key: str) -> Optional[dict[str, Any]]:
         for lane, p in presses.items()
         if lane != STARTER_KEY and p and p.get("src") != FINISH_KEY
     }
-    matches = finish_module.match(lane_times, times, manual)
+    matches = finish_module.match(
+        lane_times, times, manual, (st.get("finish_parked") or {}).get(run_key) or []
+    )
     return {
         "times_ms": times,
         "matches": matches,
@@ -1491,29 +1494,53 @@ def _finish_info(st: State, run_key: str) -> Optional[dict[str, Any]]:
 @app.post("/api/finish/assign")
 def api_post_finish_assign():
     """
-    Ordnet einen Zieleinlauf-Druck haendlich einer Bahn zu (index) oder hebt die Zuordnung auf (index = null).
+    Ordnet einen Zieleinlauf-Druck haendlich einer Bahn zu (index), hebt die Zuordnung der Bahn auf
+    (index = null) oder parkt den Druck (lane = "park"). Eine Bahn, die schon eine Zeit hat, gibt diese
+    dabei in den Parkplatz ab.
 
     Nur zum Vergleichen: die Bahnzeit des Laufs aendert sich dadurch nicht (siehe /api/finish/transfer).
-    Payload: { "run_key": "3", "lane": "2", "index": 0 | null }
+    Payload: { "run_key": "3", "lane": "2" | "park", "index": 0 | null }
     """
     st = load_state()
     payload = request.get_json(force=True, silent=True) or {}
     run_key = str(payload.get("run_key") or "")
     lane = str(payload.get("lane") or "")
     index = payload.get("index")
-    if not run_key or not lane.isdigit():
+    if not run_key or not (lane.isdigit() or lane == "park"):
         return jsonify({"ok": False, "error": "missing run_key or lane"}), 400
     collected = (st.get("finish_per_run") or {}).get(run_key) or []
     manual = st.setdefault("finish_assign", {}).setdefault(run_key, {})
+    parked = st.setdefault("finish_parked", {}).setdefault(run_key, [])
+    valid_index = isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(collected)
 
-    if index is None:
-        manual.pop(lane, None)
+    if lane == "park" or index is None:
+        if lane == "park":
+            if not valid_index:
+                return jsonify({"ok": False, "error": "invalid index"}), 400
+            for other, value in list(manual.items()):
+                if value == index:
+                    del manual[other]
+            if index not in parked:
+                parked.append(index)
+        else:
+            # Zuordnung der Bahn aufheben: Zeit parken, damit sie nicht gleich wieder automatisch greift
+            info = _finish_info(st, run_key)
+            current = ((info or {}).get("matches") or {}).get(lane)
+            manual.pop(lane, None)
+            if current and current["index"] not in parked:
+                parked.append(current["index"])
     else:
-        if not isinstance(index, int) or not 0 <= index < len(collected):
+        if not valid_index:
             return jsonify({"ok": False, "error": "invalid index"}), 400
+        info = _finish_info(st, run_key)
+        displaced = ((info or {}).get("matches") or {}).get(lane)
         for other, value in list(manual.items()):
             if value == index:
                 del manual[other]
+        if index in parked:
+            parked.remove(index)
+        if displaced and displaced["index"] != index and displaced["index"] not in parked:
+            parked.append(displaced["index"])
         manual[lane] = index
     save_state(st)
     return jsonify({"ok": True})
@@ -1998,6 +2025,7 @@ def api_test_reset_run():
     (st.get("triggers_per_run") or {}).pop(run_key, None)
     (st.get("finish_per_run") or {}).pop(run_key, None)
     (st.get("finish_assign") or {}).pop(run_key, None)
+    (st.get("finish_parked") or {}).pop(run_key, None)
     (st.get("finish_adopted") or {}).pop(run_key, None)
     st["stopped_by_starter"] = [k for k in (st.get("stopped_by_starter") or []) if k != run_key]
     st["run_finished_ts"] = None

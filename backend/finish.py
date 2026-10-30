@@ -18,6 +18,7 @@ def match(
     lane_times: dict[str, int],
     times: list[int],
     manual: dict[str, int],
+    parked: Any = (),
 ) -> dict[str, dict[str, Any]]:
     """
     Ordnet Zieleinlauf-Zeiten den Bahnen zu.
@@ -27,15 +28,17 @@ def match(
             Zieleinlauf stammen, gehoeren nicht hinein (sie sind ueber ``manual`` zugeordnet).
         times: Zeiten (ms) der Zieleinlauf-Druecke.
         manual: Haendliche Zuordnung Bahn -> Index in ``times``.
+        parked: Indizes, die geparkt sind (werden nie automatisch zugeordnet).
 
     Returns:
         Bahn -> {"index", "manual", "delta_ms"}; delta_ms = Zieleinlauf-Zeit minus Bahnzeit
         (None, wenn die Bahn keine eigene Zeit hat).
     """
     result: dict[str, dict[str, Any]] = {}
+    parked_set = {i for i in parked if isinstance(i, int)}
     used: set[int] = set()
     for lane, index in manual.items():
-        if isinstance(index, int) and 0 <= index < len(times) and index not in used:
+        if isinstance(index, int) and 0 <= index < len(times) and index not in used and index not in parked_set:
             lane_time = lane_times.get(lane)
             result[lane] = {
                 "index": index,
@@ -44,6 +47,7 @@ def match(
             }
             used.add(index)
 
+    used |= parked_set
     # Rest automatisch: kleinster Abstand zuerst
     pairs = sorted(
         (abs(t - lt), lane, index)

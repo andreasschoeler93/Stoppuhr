@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.13.3 | 2026-10-30 | Zieleinlauf dynamischer: zugeordnete Zeiten (auch automatisch vorsortierte) lassen sich per Drag & Drop auf andere Bahnen ziehen oder in den Bereich „Geparkte Zeiten“ zurückziehen („✕“ parkt ebenfalls). Eine überschriebene Zeit wandert in den Parkplatz. Geparkte Zeiten werden nicht automatisch zugeordnet. |
 | v0.13.2 | 2026-10-30 | Zieleinlauf: schnelle Druckfolge möglich (Entprellung 50 ms). Zugeordnete Zeiten dienen nur dem Vergleich; der Button unter der Tabelle überträgt alle zugeordneten Zeiten als neue Laufversion (z. B. 5/2) an JAuswertung, erneutes Übertragen aktualisiert sie, „Version zurücknehmen“ entfernt sie. Neu: `POST /api/finish/transfer`. |
 | v0.13.1 | 2026-10-30 | Anzeige für den Zieleinlauf-Taster (`role: "finish"` mit Liste in `/api/display`). |
 | v0.13.0 | 2026-10-30 | Neue Rolle **Zieleinlauf**: ein Taster (Drag & Drop wie der Starter) sammelt jeden Anschlag. Die Zeiten werden automatisch den Bahnzeiten zugeordnet (Abweichung in der Spalte „Zieleinlauf“), nicht passende per Drag & Drop auf eine Bahn ziehen; hat die Bahn keine Zeit, wird die Zieleinlauf-Zeit übernommen. Die Bahnzeit bleibt die Hauptzeit. Zweiter Druck des Starters bei laufender Uhr beendet den Lauf (mit Hinweis). Neu: `POST /api/finish/assign`, Modul `backend/finish.py`. |
