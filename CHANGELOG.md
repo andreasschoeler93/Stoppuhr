@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.13.1 | 2026-10-30 | Anzeige für den Zieleinlauf-Taster (`role: "finish"` mit Liste in `/api/display`). |
 | v0.13.0 | 2026-10-30 | Neue Rolle **Zieleinlauf**: ein Taster (Drag & Drop wie der Starter) sammelt jeden Anschlag. Die Zeiten werden automatisch den Bahnzeiten zugeordnet (Abweichung in der Spalte „Zieleinlauf“), nicht passende per Drag & Drop auf eine Bahn ziehen; hat die Bahn keine Zeit, wird die Zieleinlauf-Zeit übernommen. Die Bahnzeit bleibt die Hauptzeit. Zweiter Druck des Starters bei laufender Uhr beendet den Lauf (mit Hinweis). Neu: `POST /api/finish/assign`, Modul `backend/finish.py`. |
 | v0.12.6 | 2026-10-30 | Taster-Seite: Der als Starter zugewiesene Taster zeigt „STARTER (aktiv)“ statt „–“. |
 | v0.12.5 | 2026-10-30 | Einstellungen: Neue Karte „Grenzwerte“. Die gelben und roten Schwellwerte für Taster, Pis und Ladekoffer (Akku, Spannung, Temperatur, Luftfeuchte, WLAN, CPU, Speicher, SD-Karte) sind einstellbar und lassen sich auf Standardwerte zurücksetzen. Neu: `GET/POST /api/limits`, Modul `backend/limits.py`. |

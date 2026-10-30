@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.13.0
+# Version: v0.13.1
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.13.0"
+APP_VERSION: Final[str] = "0.13.1"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -1742,6 +1742,28 @@ def api_get_display():
 
     previous_attempts = []
     if lane == FINISH_KEY:
+        # Wie der Starter, aber Zeile i zeigt den i-ten Druck des Zieleinlaufs (Anzahl = Bahnen des Laufs)
+        out["role"] = "finish"
+        out["name"] = _display_text(f"{len(cards)} Schwimmer") if cards else ""
+        out["discipline"] = _display_text(cards[0].get("Disziplin")) if cards else ""
+        collected = (st.get("finish_per_run") or {}).get(run_key) or []
+        count = len({str(c.get("Bahn")) for c in cards if str(c.get("Bahn")).isdigit()})
+        parts = []
+        for i in range(count):
+            if i < len(collected) and starter:
+                parts.append(f"{i + 1},s,{max(0, int(collected[i]['ts']) - int(starter['ts']))}")
+            else:
+                parts.append(f"{i + 1},{'r' if starter and not finished else 'w'},-1")
+        out["lanes"] = ";".join(parts)
+        if starter:
+            if finished:
+                out["state"] = "stopped"
+                out["time_ms"] = max(
+                    (max(0, int(p["ts"]) - int(starter["ts"])) for p in collected), default=0
+                )
+            else:
+                out["state"] = "running"
+                out["elapsed_ms"] = max(0, now - int(starter["ts"]))
         return jsonify(out)
     for key, previous_presses in all_presses.items():
         parsed = _parse_attempt_key(key)
