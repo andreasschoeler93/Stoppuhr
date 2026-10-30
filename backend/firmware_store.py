@@ -9,7 +9,7 @@ import re
 import urllib.request
 from typing import Any, Final, Optional
 
-REPO: Final[str] = os.environ.get("FIRMWARE_REPO", "andreasschoeler93/Taster")
+REPO: Final[str] = os.environ.get("FIRMWARE_REPO", "andreasschoeler93/Stoppuhr-2.0-Taster")
 CACHE_DIR: Final[str] = os.environ.get(
     "FIRMWARE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware_cache")
 )

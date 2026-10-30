@@ -1,4 +1,4 @@
-# Stoppuhr – Pi-Software (v0.12.0)
+# Stoppuhr – Pi-Software (v0.12.1)
 
 Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
 liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
@@ -27,7 +27,7 @@ Installiert Python-Umgebung, Redis, chrony und systemd-Dienste, die beim Booten 
 
 ```bash
 sudo apt-get install -y git
-git clone https://github.com/andreasschoeler93/Stoppuhr.git
+git clone https://github.com/andreasschoeler93/Stoppuhr-2.0-Stoppuhr.git
 cd Stoppuhr
 bash deploy/install.sh
 ```
@@ -106,7 +106,7 @@ Hinweise:
 
 ### Taster-Firmware (ab v0.7.0)
 
-**Einstellungen → Taster-Firmware** listet die Firmware-Releases aus GitHub (`andreasschoeler93/Taster`, änderbar mit `FIRMWARE_REPO`).
+**Einstellungen → Taster-Firmware** listet die Firmware-Releases aus GitHub (`andreasschoeler93/Stoppuhr-2.0-Taster`, änderbar mit `FIRMWARE_REPO`).
 **Auf Taster laden** speichert die `firmware.bin` unter `backend/firmware_cache/` (`FIRMWARE_DIR`) und bietet sie allen online Tastern an.
 Diese laden sie vom Pi, prüfen die MD5 und starten neu. Ohne Internet stehen bereits gespeicherte Versionen zur Verfügung.
 

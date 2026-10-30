@@ -40,7 +40,7 @@ Gemeinsame Adresse (VIP): **192.168.50.10**. Sie liegt immer auf dem Pi, der ger
 sudo apt-get update
 sudo apt-get install -y git
 mkdir -p ~/apps && cd ~/apps
-git clone https://github.com/andreasschoeler93/Stoppuhr.git stoppuhr
+git clone https://github.com/andreasschoeler93/Stoppuhr-2.0-Stoppuhr.git stoppuhr
 cd stoppuhr
 bash deploy/install.sh
 ```
