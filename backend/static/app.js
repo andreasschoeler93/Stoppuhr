@@ -54,6 +54,7 @@ async function refreshVitals() {
   const pi = await apiGet(`/api/vitals/pi?hours=${hours}`).catch(() => ({ nodes: [] }));
   if (!starts.length && pi.starts) starts = pi.starts;
   const piNodes = pi.nodes || [];
+  await refreshCharger().catch(() => {});
   const piSeries = piNodes.map(n => ({ label: n.name, color: PI_COLORS[n.name] || "#0d6efd", points: n.points || [] }));
   vitalsData = { hours: Number(hours), series, starts: starts || [], tasters: list, piNodes, piSeries };
   drawVitals();
@@ -97,6 +98,52 @@ function vitalsStatusHtml() {
   return `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+// Ladekoffer: Status der Ladeplatine (kommt per WLAN an den Pi, GET /api/charger)
+let chargerData = null;
+const CHARGER_STATE = {
+  bereit: ["text-bg-success", "Ladekoffer: bereit"],
+  laedt: ["text-bg-warning", "Ladekoffer: lädt"],
+  teilweise: ["text-bg-warning", "Ladekoffer: nicht komplett"],
+  fehler: ["text-bg-danger", "Ladekoffer: Fehler"],
+  offline: ["text-bg-secondary", "Ladekoffer: offline"],
+};
+const CHARGER_LEVEL = { error: "danger", warn: "warning", info: "info", ok: "success" };
+
+async function refreshCharger() {
+  chargerData = await apiGet("/api/charger");
+  const badge = byId("chargerBadge"), box = byId("chargerAlerts");
+  if (!chargerData.known) { badge.classList.add("d-none"); box.innerHTML = ""; return; }
+  const [cls, label] = CHARGER_STATE[chargerData.state] || CHARGER_STATE.offline;
+  badge.className = "badge " + cls;
+  badge.textContent = label;
+  // Oben nur, was Aufmerksamkeit braucht; alles andere steht im Tab "Vitaldaten"
+  box.innerHTML = chargerData.messages.filter(m => m.level === "error" || m.level === "warn")
+    .map(m => `<div class="alert alert-${CHARGER_LEVEL[m.level]} py-1 px-2 small mb-2">${escapeHtml(m.text)}</div>`).join("");
+  if (vitalsData && byId("vitals").classList.contains("active")) drawVitals();
+}
+
+function chargerStatusHtml() {
+  if (!chargerData || !chargerData.known) return "";
+  const s = chargerData.status, slots = {};
+  s.slots.forEach(x => { slots[x.n] = x; });
+  const num = (v, dec, unit) => (v === null || v === undefined) ? "–" : `${Number(v).toFixed(dec)} ${unit}`;
+  const cell = x => !x || !x.present ? '<span class="badge text-bg-secondary">fehlt</span>'
+    : x.fault ? '<span class="badge text-bg-danger">Fehler</span>'
+    : x.charging ? '<span class="badge text-bg-warning">lädt</span>'
+    : x.full ? '<span class="badge text-bg-success">voll</span>' : '<span class="badge text-bg-light text-dark">da</span>';
+  const nums = Array.from({ length: 10 }, (_, i) => i + 1);
+  const head = nums.map(n => `<th class="text-center">${n}</th>`).join("");
+  const rows = [["Zustand", x => cell(x)], ["Spannung", x => x && x.present ? num(x.vbat, 2, "V") : "–"]];
+  const body = rows.map(([name, f]) => `<tr><th class="text-nowrap fw-normal">${name}</th>${
+    nums.map(n => `<td class="text-center text-nowrap">${f(slots[n])}</td>`).join("")}</tr>`).join("");
+  const [cls, label] = CHARGER_STATE[chargerData.state] || CHARGER_STATE.offline;
+  const msgs = chargerData.messages.map(m => `<div class="small text-${CHARGER_LEVEL[m.level]}">${escapeHtml(m.text)}</div>`).join("");
+  const info = `Temperatur ${num(s.temp, 1, "°C")} · Luftfeuchte ${num(s.humidity, 0, "%")} · WLAN ${num(s.rssi, 0, "dBm")} · Firmware ${escapeHtml(s.fw || "–")}`;
+  return `<div class="mt-3"><strong class="small">Ladekoffer</strong> <span class="badge ${cls}">${label.replace("Ladekoffer: ", "")}</span>
+    <div class="table-responsive mt-1"><table class="table table-sm align-middle mb-0"><thead><tr><th>Platz</th>${head}</tr></thead><tbody>${body}</tbody></table></div>
+    <div class="small text-muted mt-1">${info}</div>${msgs}</div>`;
+}
+
 function drawVitals() {
   const box = byId("vitalsCharts");
   const s = vitalsData.series;
@@ -110,7 +157,7 @@ function drawVitals() {
       `<div class="col-12"><div class="card h-100"><div class="card-body p-2">
       <strong class="small">Zustand der Taster und Pis</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>`;
   }
-  byId("vitalsStatus").innerHTML = vitalsStatusHtml() + piStatusHtml();
+  byId("vitalsStatus").innerHTML = vitalsStatusHtml() + piStatusHtml() + chargerStatusHtml();
   VITAL_CHARTS.forEach(c => drawVitalChart(c, s));
   PI_CHARTS.forEach(c => drawVitalChart(c, vitalsData.piSeries));
 }
@@ -1098,6 +1145,8 @@ async function init() {
   // initial loads
   await refreshSystemStatus().catch(() => {});
   setInterval(() => refreshCluster().catch(() => {}), 10000);
+  refreshCharger().catch(() => {});
+  setInterval(() => refreshCharger().catch(() => {}), 10000);
   await loadButtons().catch(() => {});
   renderTestButtons();
   await loadRunStatus().catch(() => {});

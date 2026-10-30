@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.12.0 | 2026-10-30 | Ladekoffer-Anbindung: Neue Schnittstellen `POST /api/charger` (offen, für die Ladeplatine) und `GET /api/charger`. Statusmeldungen (Fehler, Übertemperatur, fehlende oder ladende Taster, offline) in Kopfzeile, Meldungsleiste und Tab „Vitaldaten“. Neues Modul `ladekoffer.py` mit Tests. |
 | v0.11.3 | 2026-10-30 | Zwei-Pi-WLAN: Die Taster-Zugangspunkte sind fest auf 2,4 GHz eingestellt (Koffer Kanal 1, Bad Kanal 11). Neues Skript `wlan-kanal-setzen.sh` stellt auch vorhandene Installationen um; Kanäle 1, 6 oder 11 sind wählbar. Außerdem Syntaxfehler im Zwei-Pi-Installer behoben. |
 | v0.11.2 | 2026-10-29 | Vitaldaten: CPU-Temperatur und CPU-Last der Pis stehen gemeinsam in einem Diagramm (Temperatur durchgezogen, Last gestrichelt, Skala 0–100). |
 | v0.11.1 | 2026-10-29 | Vitaldaten: Das Diagramm „Pi CPU-Last“ entfällt. Es bleibt ein Pi-Diagramm (CPU-Temperatur, beide Pis), die Box „Zustand“ läuft über die volle Breite. |

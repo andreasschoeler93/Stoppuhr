@@ -1,4 +1,4 @@
-# Stoppuhr – Pi-Software (v0.11.3)
+# Stoppuhr – Pi-Software (v0.12.0)
 
 Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
 liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
@@ -17,6 +17,7 @@ Versionsverlauf: [CHANGELOG.md](CHANGELOG.md). Zwei-Pi-Betrieb (Koffer und Bad):
 - Tab „Vitaldaten“ (ab v0.9.0): je ein Diagramm für Akku, Akkuspannung, Temperatur, Luftfeuchte und WLAN-Stärke mit allen Tastern in eigenen Farben (letzte 15/30 Minuten, 1/3/6 Stunden). Senkrechte gestrichelte Linien „L<Nr>“ markieren jeden Laufstart.
   Die Werte kommen aus den ohnehin alle 10 s gesendeten Vitaldaten (kein Mehraufwand am Taster) und liegen in Redis (`VITALS_HIST:<MAC>`, höchstens 6 Stunden).
   Schnittstelle: `GET /api/vitals/history?mac=…&hours=…`.
+- Ladekoffer (ab v0.12.0): Die Ladeplatine (Projekt `Ladekoffer`) sendet alle 5 s per `POST /api/charger` (JSON) Ladezustand der 10 Plätze, Temperatur, Luftfeuchte und Ampel. Der Pi wertet daraus Statusmeldungen aus (Kopfzeile, Meldungen oben, Tabelle im Tab „Vitaldaten“). Nach 30 s ohne Meldung gilt der Ladekoffer als offline. `GET /api/charger` liefert den ausgewerteten Zustand. Die Taster sind davon nicht betroffen.
 
 ## Installation
 
@@ -58,7 +59,7 @@ docker run --rm -v "$PWD/backend:/backend" -w /backend stoppuhr-app:latest pytho
 
 Die ganze Oberfläche ist durch Benutzername und Kennwort geschützt. Beim ersten Öffnen legst du beide fest.
 Ändern: **Einstellungen → Zugang zur Oberfläche** (das alte Kennwort wird abgefragt; andere Sitzungen werden abgemeldet).
-Ohne Anmeldung bleiben nur erreichbar: die Schnittstellen der Taster (`/api/taster`, `/api/vitals`, `/api/triggers`,
+Ohne Anmeldung bleiben nur erreichbar: die Schnittstellen der Taster (`/api/taster`, `/api/vitals`, `/api/charger` (nur POST), `/api/triggers`,
 `/api/display`, `/api/abort-run`, Firmware-Download, `/api/ota-status`), `/api/version` und der Export `/heats.xml` für JAuswertung.
 Die Sitzung bleibt 30 Tage; nach fünf Fehlversuchen pro Minute sperrt der Server die Anmeldung kurz.
 Der Schlüssel der Sitzungen und der Kennwort-Hash liegen in Redis und werden im Zwei-Pi-Betrieb mitkopiert.

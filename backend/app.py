@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.11.3
+# Version: v0.12.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -28,6 +28,7 @@ from flask.sessions import SecureCookieSessionInterface
 from flask.typing import ResponseReturnValue
 import auth
 import firmware_store
+import ladekoffer
 import node_info
 import pi_update
 import vitals_history
@@ -35,7 +36,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.11.3"
+APP_VERSION: Final[str] = "0.12.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -267,6 +268,7 @@ _OPEN_ROUTES: Final[frozenset[tuple[str, str]]] = frozenset({
     ("GET", "/api/version"),
     ("POST", "/api/taster"),
     ("POST", "/api/vitals"),
+    ("POST", "/api/charger"),
     ("POST", "/api/triggers"),
     ("GET", "/api/display"),
     ("POST", "/api/abort-run"),
@@ -753,6 +755,24 @@ def api_post_vitals():
     save_state(st)
     vitals_history.add(redis_store, str(mac), new_vital["ts"], dict(new_vital))
     return jsonify({"ok": True, "vital": new_vital})
+
+
+@app.post("/api/charger")
+def api_post_charger():
+    """Statusmeldung der Ladeplatine des Ladekoffers (ohne Anmeldung, wie die Taster)."""
+    status = ladekoffer.sanitize(request.get_json(force=True, silent=True))
+    if status is None:
+        return jsonify({"ok": False, "error": "invalid payload"}), 400
+    # Der Server-Zeitstempel zaehlt, die Platine hat keine Uhr
+    status["ts"] = now_ms()
+    ladekoffer.save(redis_store, status)
+    return jsonify({"ok": True})
+
+
+@app.get("/api/charger")
+def api_get_charger():
+    """Zustand des Ladekoffers mit Statusmeldungen; known=false, solange nie etwas gemeldet wurde."""
+    return jsonify(ladekoffer.evaluate(ladekoffer.load(redis_store), now_ms()))
 
 
 @app.get("/api/vitals/history")
