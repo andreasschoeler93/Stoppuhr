@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.13.4
+# Version: v0.14.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,13 +38,14 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.13.4"
+APP_VERSION: Final[str] = "0.14.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
 STARTER_KEY: Final[str] = "starter"
 FINISH_KEY: Final[str] = finish_module.FINISH_KEY
 STARTER_STOP_MIN_MS: Final[int] = 1500  # Zweiter Starter-Druck davor gilt als Prellen
+STARTER_FINISH_GRACE_MS: Final[int] = 5000  # Kombirolle: so lange nach Lauf-Ende zaehlt ein Druck noch als Zieleinlauf
 CLOCK_OFFSET_MIN_MS: Final[int] = 250
 KEEP_HOURS_DEFAULT: Final[float] = 6.0
 HEATS_XML_PATH: Final[str] = os.environ.get("HEATS_XML_PATH", "/app/results/heats.xml")
@@ -135,6 +136,7 @@ def _default_state() -> State:
             "auto_next_run_s": "10",
             "stop_lockout_s": "5",
             "shutdown_grace_s": "10",
+            "starter_is_finish": "0",
         },
         "shutdown_until_ms": 0,
         "start_locked_until_ms": 0,
@@ -455,6 +457,8 @@ def api_set_settings() -> ResponseReturnValue:
                 settings[key] = str(max(0, int(payload[key])))
             except (TypeError, ValueError):
                 return jsonify({"ok": False, "error": f"{key} must be a number"}), 400
+    if "starter_is_finish" in payload:
+        settings["starter_is_finish"] = "1" if payload["starter_is_finish"] in (True, 1, "1", "true") else "0"
     if "shutdown_grace_s" in payload:
         try:
             shutdown_grace_s = int(payload["shutdown_grace_s"])
@@ -1652,6 +1656,15 @@ def api_post_triggers():
 
     if lane == FINISH_KEY:
         return _record_finish_press(st, current_key, mac_norm, ts_val)
+
+    # Kombirolle Starter/Zieleinlauf: der erste Druck startet, jeder weitere ist ein Zieleinlauf-Druck
+    # (auch kurz nach dem Lauf-Ende, damit der letzte Anschlag nicht den naechsten Lauf startet)
+    if lane == STARTER_KEY and str(st.get("settings", {}).get("starter_is_finish", "0")) == "1":
+        started = (st.get("triggers_per_run") or {}).get(current_key, {}).get(STARTER_KEY)
+        done_ts = st.get("run_finished_ts")
+        recently_done = done_ts is not None and now_ms() - int(done_ts) < STARTER_FINISH_GRACE_MS
+        if started and (done_ts is None or recently_done):
+            return _record_finish_press(st, current_key, mac_norm, ts_val)
 
     if lane == STARTER_KEY:
         locked_until = int(st.get("start_locked_until_ms", 0) or 0)

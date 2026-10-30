@@ -1,4 +1,4 @@
-# Stoppuhr – Pi-Software (v0.13.4)
+# Stoppuhr – Pi-Software (v0.14.0)
 
 Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
 liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
@@ -86,6 +86,8 @@ Gespeicherte Zeiten bleiben; Versionen werden getrennt nummeriert (z. B. `5/2`) 
 - **Zieleinlauf-Taster** (optional): wie den Starter per Drag & Drop auf „Zieleinlauf“ ziehen. Jeder Druck nach dem Start wird gesammelt; die **Bahnzeit bleibt die Hauptzeit**.
 - Die gesammelten Zeiten werden automatisch der nächstliegenden Bahnzeit zugeordnet (höchstens 3 s Abstand). In der Spalte „Zieleinlauf“ steht die Abweichung (Zieleinlauf minus Bahn, ab 0,5 s rot).
 - Geparkte (nicht zugeordnete) Zeiten erscheinen unter der Tabelle und lassen sich per Drag & Drop auf die Spalte „Zieleinlauf“ einer Bahn ziehen. Auch bereits zugeordnete Zeiten (automatisch oder händisch) lassen sich auf eine andere Bahn ziehen oder zurück in den Parkbereich ziehen; „✕“ parkt ebenfalls. Eine Zeit, die auf eine belegte Bahn fällt, ersetzt die dortige, diese wandert in den Parkbereich. Die Zuordnung ändert die Bahnzeiten nicht.
+- Die Abweichung zur Bahnzeit wird ab dem Grenzwert gelb bzw. rot (Standard 0,5 s / 1 s, einstellbar unter Einstellungen → Grenzwerte).
+- **Starter / Zieleinlauf (ab v0.14.0):** Einstellungen → Option „Starter-Taster erfasst zusätzlich den Zieleinlauf“. Der Starter-Taster behält die Starteransicht; der erste Druck startet, jeder weitere (auch bis 5 s nach Lauf-Ende) wird im Hintergrund als Zieleinlauf-Zeit gesammelt. Der Doppeldruck-Stopp entfällt dabei.
 - **Übertragen (ab v0.13.2):** Der Button unter der Tabelle legt bei jedem Klick eine **neue Laufversion** an (Lauf 5/2, dann 5/3 …) und schickt sie an JAuswertung. Bahnen mit zugeordneter Zieleinlauf-Zeit bekommen diese, alle anderen Bahnen ihre normal gestoppte Zeit (ab v0.13.4). „Letzte Version zurücknehmen“ entfernt die jeweils neueste.
 - Der Zieleinlauf-Taster nimmt auch schnelle Druckfolgen an (mehrere Schwimmer kurz hintereinander).
 - **Zweiter Druck des Starters** bei laufender Uhr (frühestens 1,5 s nach dem Start) beendet den Lauf. Bahnen ohne Zeit bleiben leer; oben erscheint ein Hinweis.

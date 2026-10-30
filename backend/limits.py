@@ -24,6 +24,9 @@ DEFAULTS: Final[dict[str, dict[str, dict[str, Any]]]] = {
         "humidity": {"dir": "high", "values": [80, 90]},
         "rssi": {"dir": "low", "values": [-75, -85]},
     },
+    "finish": {
+        "diff": {"dir": "high", "values": [0.5, 1]},
+    },
 }
 
 

@@ -72,6 +72,7 @@ const LIMITS = {
     mem_percent: { high: [85, 95] }, disk_percent: { high: [85, 95] },
   },
   charger: { temp: { high: [45, 60] }, humidity: { high: [80, 90] }, rssi: { low: [-75, -85] } },
+  finish: { diff: { high: [0.5, 1] } },
 };
 
 // Beschriftung der Einstellungen: [Gruppe, Schlüssel, Name, Einheit, Schrittweite]
@@ -88,6 +89,7 @@ const LIMIT_DEFS = [
   ["charger", "temp", "Ladekoffer: Temperatur", "°C", 1],
   ["charger", "humidity", "Ladekoffer: Luftfeuchte", "%", 1],
   ["charger", "rssi", "Ladekoffer: WLAN-Signal", "dBm", 1],
+  ["finish", "diff", "Zieleinlauf: Abweichung zur Bahnzeit (±)", "s", 0.1],
 ];
 
 function applyLimits(serverLimits) {
@@ -644,6 +646,7 @@ async function loadSettingsIntoUI() {
   byId("autoNextInput").value = s.auto_next_run_s ?? "10";
   byId("stopLockoutInput").value = s.stop_lockout_s ?? "5";
   byId("shutdownGraceInput").value = s.shutdown_grace_s ?? "10";
+  byId("starterIsFinishInput").checked = s.starter_is_finish === "1";
 }
 
 async function loadStartcardsFromBackend() {
@@ -948,7 +951,8 @@ function updateFinishUi(runKey, run) {
     if (m) {
       const d = m.delta_ms;
       const diff = d == null ? "ohne Bahnzeit" : (d >= 0 ? "+" : "−") + (Math.abs(d) / 1000).toFixed(2) + " s";
-      const cls = d == null ? "text-primary" : Math.abs(d) > 500 ? "text-danger" : "text-muted";
+      const level = d == null ? null : limitLevel(Math.abs(d) / 1000, LIMITS.finish.diff);
+      const cls = d == null ? "text-primary" : level === "danger" ? "val-danger" : level === "warning" ? "val-warning" : "text-muted";
       html = `<span class="finish-chip" draggable="true" data-index="${m.index}" data-run-key="${escapeHtml(runKey || "")}">${formatMs(fin.times_ms[m.index])}</span> <span class="small ${cls}">(${diff})</span>`
         + ` <button type="button" class="btn btn-sm btn-link p-0 btn-finish-clear" data-lane="${escapeHtml(lane)}" title="Zeit parken">✕</button>`;
     }
@@ -1404,8 +1408,8 @@ async function init() {
         startcards_suffix: suffix,
         auto_next_run_s: byId("autoNextInput").value,
         stop_lockout_s: byId("stopLockoutInput").value,
-        shutdown_grace_s: byId("shutdownGraceInput").value
-      });
+        shutdown_grace_s: byId("shutdownGraceInput").value,
+        starter_is_finish: byId("starterIsFinishInput").checked
       // mirror to main tab
       await loadSettingsIntoUI();
       const msg = byId("settingsSavedMsg");
