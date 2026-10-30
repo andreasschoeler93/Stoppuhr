@@ -243,6 +243,25 @@
         </div>
       </div>
 
+      <div class="card mb-3" id="limitsCard">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Grenzwerte (Farben und Meldungen)</h2>
+          <div class="form-text mb-2">Ab dem gelben Wert wird ein Messwert gelb, ab dem roten rot. Rote und gelbe Balken oben und die Hinterlegung bei Bahnen und Tastern richten sich danach.</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2">
+              <thead><tr><th>Messwert</th><th>Bedeutung</th><th style="width:8rem">Gelb</th><th style="width:8rem">Rot</th><th>Einheit</th></tr></thead>
+              <tbody id="limitsBody"></tbody>
+            </table>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-primary btn-sm" id="btnSaveLimits">Speichern</button>
+            <button class="btn btn-outline-secondary btn-sm" id="btnResetLimits">Standardwerte</button>
+            <span class="text-success small d-none" id="limitsSavedMsg">Gespeichert.</span>
+            <span class="text-danger small d-none" id="limitsError"></span>
+          </div>
+        </div>
+      </div>
+
       <div class="card mb-3" id="wifiCard">
         <div class="card-body">
           <h2 class="h6 mb-2">WLAN-Netze</h2>

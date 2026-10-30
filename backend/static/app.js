@@ -61,6 +61,7 @@ async function refreshVitals() {
 }
 
 // Grenzwerte: low = Wert darunter, high = Wert darüber. [gelb ab, rot ab]
+// Standardwerte; die gespeicherten Werte kommen vom Server (GET /api/limits, Einstellungen → Grenzwerte)
 const LIMITS = {
   taster: {
     battery: { low: [30, 15] }, vbat: { low: [3.5, 3.3] }, temp: { high: [45, 55] },
@@ -72,6 +73,74 @@ const LIMITS = {
   },
   charger: { temp: { high: [45, 60] }, humidity: { high: [80, 90] }, rssi: { low: [-75, -85] } },
 };
+
+// Beschriftung der Einstellungen: [Gruppe, Schlüssel, Name, Einheit, Schrittweite]
+const LIMIT_DEFS = [
+  ["taster", "battery", "Taster: Akku", "%", 1],
+  ["taster", "vbat", "Taster: Akkuspannung", "V", 0.01],
+  ["taster", "temp", "Taster: Temperatur", "°C", 1],
+  ["taster", "humidity", "Taster: Luftfeuchte", "%", 1],
+  ["taster", "rssi", "Taster: WLAN-Signal", "dBm", 1],
+  ["pi", "cpu_temp", "Pi: CPU-Temperatur", "°C", 1],
+  ["pi", "cpu_percent", "Pi: CPU-Last", "%", 1],
+  ["pi", "mem_percent", "Pi: Speicher", "%", 1],
+  ["pi", "disk_percent", "Pi: SD-Karte", "%", 1],
+  ["charger", "temp", "Ladekoffer: Temperatur", "°C", 1],
+  ["charger", "humidity", "Ladekoffer: Luftfeuchte", "%", 1],
+  ["charger", "rssi", "Ladekoffer: WLAN-Signal", "dBm", 1],
+];
+
+function applyLimits(serverLimits) {
+  Object.entries(serverLimits || {}).forEach(([group, rules]) => {
+    Object.entries(rules).forEach(([key, rule]) => {
+      if (LIMITS[group] && LIMITS[group][key] && Array.isArray(rule.values)) {
+        LIMITS[group][key] = { [rule.dir]: rule.values.map(Number) };
+      }
+    });
+  });
+}
+
+function renderLimitsForm() {
+  byId("limitsBody").innerHTML = LIMIT_DEFS.map(([group, key, label, unit, step]) => {
+    const rule = LIMITS[group][key], low = !!rule.low, values = rule.low || rule.high;
+    const input = (i, color) => `<input type="number" step="${step}" class="form-control form-control-sm limit-input"
+      data-group="${group}" data-key="${key}" data-idx="${i}" value="${values[i]}" style="border-color:${color}">`;
+    return `<tr><td>${label}</td><td class="small text-muted">${low ? "Wert darunter ist schlecht" : "Wert darüber ist schlecht"}</td>
+      <td>${input(0, "#ffc107")}</td><td>${input(1, "#dc3545")}</td><td>${unit}</td></tr>`;
+  }).join("");
+}
+
+async function loadLimits() {
+  const data = await apiGet("/api/limits");
+  applyLimits(data.limits);
+  renderLimitsForm();
+}
+
+async function saveLimits(reset) {
+  const err = byId("limitsError");
+  err.classList.add("d-none");
+  const limits = {};
+  document.querySelectorAll(".limit-input").forEach(inp => {
+    const { group, key, idx } = inp.dataset;
+    limits[group] = limits[group] || {};
+    limits[group][key] = limits[group][key] || { values: [null, null] };
+    limits[group][key].values[Number(idx)] = inp.value;
+  });
+  try {
+    const res = await apiPost("/api/limits", reset ? { reset: true } : { limits });
+    applyLimits(res.limits);
+    renderLimitsForm();
+    const msg = byId("limitsSavedMsg");
+    msg.classList.remove("d-none");
+    setTimeout(() => msg.classList.add("d-none"), 1500);
+    refreshAllAlerts();
+    loadButtons().catch(() => {});
+    if (vitalsData && byId("vitals").classList.contains("active")) drawVitals();
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove("d-none");
+  }
+}
 
 // Liefert "danger" (rot), "warning" (gelb) oder null
 function limitLevel(value, rule) {
@@ -1267,6 +1336,13 @@ async function init() {
   // initial loads
   await refreshSystemStatus().catch(() => {});
   setInterval(() => refreshCluster().catch(() => {}), 10000);
+  // Grenzwerte zuerst laden, damit Farben und Balken von Anfang an stimmen
+  renderLimitsForm();
+  await loadLimits().catch(() => {});
+  byId("btnSaveLimits").addEventListener("click", () => saveLimits(false));
+  byId("btnResetLimits").addEventListener("click", () => {
+    if (window.confirm("Alle Grenzwerte auf die Standardwerte zurücksetzen?")) saveLimits(true);
+  });
   refreshAllAlerts();
   setInterval(refreshAllAlerts, 10000);
   await loadButtons().catch(() => {});

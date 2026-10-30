@@ -1,4 +1,4 @@
-# Stoppuhr – Pi-Software (v0.12.4)
+# Stoppuhr – Pi-Software (v0.12.5)
 
 Webbasierte Wettkampf-Stoppuhr: ESP32-Taster messen die Zeit, der Raspberry Pi sammelt, wertet aus und
 liefert die Ergebnisse an JAuswertung. Die Taster-Firmware liegt im Repository `Taster`.
@@ -82,6 +82,13 @@ Gespeicherte Zeiten bleiben; Versionen werden getrennt nummeriert (z. B. `5/2`) 
 `GET /api/display` liefert Namen und Disziplinen als UTF-8 mit Umlauten; die Firmware stellt `ä ö ü Ä Ö Ü` korrekt dar.
 
 ## Einstellungen: WLAN, Zugang und Updates
+
+### Grenzwerte (ab v0.12.5)
+
+**Einstellungen → Grenzwerte**: Je Messwert (Akku, Spannung, Temperatur, Luftfeuchte, WLAN-Signal von Tastern; CPU-Temperatur, CPU-Last, Speicher, SD-Karte der Pis;
+Temperatur, Luftfeuchte und WLAN des Ladekoffers) ein gelber und ein roter Wert. Danach richten sich die Schriftfarben in der Übersicht,
+die Hinterlegung bei Bahnen und Tastern und die Balken oben. Bei „Wert darunter ist schlecht“ (Akku, Spannung, WLAN) muss der rote Wert kleiner oder gleich dem gelben sein, sonst umgekehrt.
+**Standardwerte** setzt alles zurück. Gespeichert wird in den Einstellungen des Servers (`GET/POST /api/limits`).
 
 ### WLAN-Netze (ab v0.8.0)
 

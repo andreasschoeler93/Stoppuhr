@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.12.4
+# Version: v0.12.5
 # Status: stable-beta
 # ----------------------------------------
 
@@ -29,6 +29,7 @@ from flask.typing import ResponseReturnValue
 import auth
 import firmware_store
 import ladekoffer
+import limits as limits_module
 import node_info
 import pi_update
 import vitals_history
@@ -36,7 +37,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.12.4"
+APP_VERSION: Final[str] = "0.12.5"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -451,6 +452,30 @@ def api_set_settings() -> ResponseReturnValue:
     st["settings"] = settings
     save_state(st)
     return jsonify({"ok": True, "settings": settings})
+
+
+@app.get("/api/limits")
+def api_get_limits() -> ResponseReturnValue:
+    st = load_state()
+    return jsonify({"limits": limits_module.merged(st.get("settings", {}).get("limits")),
+                    "defaults": limits_module.defaults()})
+
+
+@app.post("/api/limits")
+def api_set_limits() -> ResponseReturnValue:
+    payload = request.get_json(force=True, silent=True) or {}
+    if payload.get("reset") is True:
+        new_limits: Any = limits_module.defaults()
+    else:
+        new_limits, error = limits_module.validate(payload.get("limits"))
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+    st = load_state()
+    settings = st.get("settings", {})
+    settings["limits"] = new_limits
+    st["settings"] = settings
+    save_state(st)
+    return jsonify({"ok": True, "limits": new_limits})
 
 
 @app.post("/api/competition/end")
