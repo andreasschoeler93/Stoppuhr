@@ -6,7 +6,7 @@ FINISH_KEY = "ziel"
 # Ein Zieleinlauf-Druck darf hoechstens so weit von der Bahnzeit entfernt sein, um automatisch zugeordnet zu werden
 MATCH_WINDOW_MS = 3000
 # Prellen des Tasters: Druecke in so kurzem Abstand zaehlen als einer
-DEBOUNCE_MS = 500
+DEBOUNCE_MS = 50
 
 
 def finish_times(starter_ts: int, presses: list[dict[str, Any]]) -> list[int]:

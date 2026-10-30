@@ -938,7 +938,7 @@ function setHtmlIfChanged(el, html) {
   el.innerHTML = html;
 }
 
-// Zieleinlauf: Zuordnung je Bahn, nicht zugeordnete Zeiten und Hinweis bei Abbruch durch den Starter
+// Zieleinlauf: Zuordnung je Bahn, nicht zugeordnete Zeiten, Übertragen-Button und Hinweis bei Abbruch durch den Starter
 function updateFinishUi(runKey, run) {
   const fin = run.finish;
   document.querySelectorAll(".finish-cell").forEach(td => {
@@ -947,7 +947,7 @@ function updateFinishUi(runKey, run) {
     let html = "";
     if (m) {
       const d = m.delta_ms;
-      const diff = d == null ? "als Bahnzeit übernommen" : (d >= 0 ? "+" : "−") + (Math.abs(d) / 1000).toFixed(2) + " s";
+      const diff = d == null ? "ohne Bahnzeit" : (d >= 0 ? "+" : "−") + (Math.abs(d) / 1000).toFixed(2) + " s";
       const cls = d == null ? "text-primary" : Math.abs(d) > 500 ? "text-danger" : "text-muted";
       html = `${formatMs(fin.times_ms[m.index])} <span class="small ${cls}">(${diff})</span>`
         + (m.manual ? ` <button type="button" class="btn btn-sm btn-link p-0 btn-finish-clear" data-lane="${escapeHtml(lane)}" title="Zuordnung aufheben">✕</button>` : "");
@@ -960,9 +960,27 @@ function updateFinishUi(runKey, run) {
   pool.dataset.runKey = runKey || "";
   const free = fin ? fin.unassigned : [];
   setHtmlIfChanged(pool, free.length
-    ? `<div class="small text-muted mb-1">Nicht zugeordnete Zieleinlauf-Zeiten – per Drag &amp; Drop auf eine Bahn ziehen:</div>`
+    ? `<div class="small text-muted mb-1">Nicht zugeordnete Zieleinlauf-Zeiten – per Drag &amp; Drop auf die Spalte „Zieleinlauf“ einer Bahn ziehen:</div>`
       + free.map(i => `<span class="finish-chip" draggable="true" data-index="${i}">${formatMs(fin.times_ms[i])}</span>`).join("")
     : "");
+
+  // Übertragen: alle zugeordneten Zeiten als neue Laufversion (z. B. 5/2) an die Auswertung
+  const matches = fin ? Object.entries(fin.matches) : [];
+  let transfer = "";
+  if (matches.length) {
+    const adopted = run.adopted;
+    const upToDate = adopted && matches.length === Object.keys(adopted.lanes).length
+      && matches.every(([lane, m]) => adopted.lanes[lane] === fin.times_ms[m.index]);
+    transfer = `<button type="button" class="btn btn-sm ${upToDate ? "btn-outline-success" : "btn-primary"} btn-finish-transfer">`
+      + (adopted ? (upToDate ? `✓ Übertragen als ${escapeHtml(adopted.label)}` : `Zieleinlauf-Zeiten aktualisieren (${escapeHtml(adopted.label)})`)
+                 : "Zieleinlauf-Zeiten als neue Laufversion übertragen")
+      + `</button>`
+      + (adopted ? ` <button type="button" class="btn btn-sm btn-outline-secondary btn-finish-undo">Version zurücknehmen</button>` : "")
+      + `<span class="small text-muted ms-2">${matches.length} Bahn(en) zugeordnet</span>`;
+  }
+  const box = byId("finishTransfer");
+  box.dataset.runKey = runKey || "";
+  setHtmlIfChanged(box, transfer);
 
   let notice = "";
   if (run.stopped_by_starter) {
@@ -989,9 +1007,21 @@ async function assignFinish(runKey, lane, index) {
   }
 }
 
+async function transferFinish(runKey, undo) {
+  try {
+    await apiPost("/api/finish/transfer", { run_key: runKey, undo: !!undo });
+    await loadRunStatus();
+  } catch (e) {
+    alert("Übertragen fehlgeschlagen: " + e.message);
+  }
+}
+
 document.addEventListener("click", ev => {
   const clear = ev.target.closest(".btn-finish-clear");
   if (clear) assignFinish(clear.closest(".finish-cell").dataset.runKey, clear.dataset.lane, null);
+  const box = byId("finishTransfer");
+  if (ev.target.closest(".btn-finish-transfer")) transferFinish(box.dataset.runKey, false);
+  if (ev.target.closest(".btn-finish-undo")) transferFinish(box.dataset.runKey, true);
 });
 
 function latestAttemptKeyForRun(run) {

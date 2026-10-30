@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.13.1
+# Version: v0.13.2
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.13.1"
+APP_VERSION: Final[str] = "0.13.2"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -227,13 +227,18 @@ def _attempt_key(run: int, attempt: int) -> str:
 
 
 def _next_attempt(st: State, run: int) -> int:
-    attempts = (
+    attempts = [
         attempt
         for key in (st.get("triggers_per_run") or {})
         if (parsed := _parse_attempt_key(key)) is not None
         for existing_run, attempt in [parsed]
         if existing_run == run
-    )
+    ]
+    # Unterversionen aus uebernommenen Zieleinlauf-Zeiten sind ebenfalls vergeben
+    for key, entry in (st.get("finish_adopted") or {}).items():
+        parsed = _parse_attempt_key(key)
+        if parsed is not None and parsed[0] == run:
+            attempts.append(int(entry["attempt"]))
     return max(attempts, default=0) + 1
 
 
@@ -510,6 +515,7 @@ def api_end_competition() -> ResponseReturnValue:
     st["triggers_per_run"] = {}
     st["finish_per_run"] = {}
     st["finish_assign"] = {}
+    st["finish_adopted"] = {}
     st["stopped_by_starter"] = []
     st["clock_offsets"] = {}
     st["current_run"] = 1
@@ -1452,7 +1458,7 @@ def _record_finish_press(st: State, run_key: str, mac: str, ts: int) -> Response
     if not presses.get(STARTER_KEY):
         return jsonify({"ok": True, "ignored": True, "reason": "not_started"})
     collected = st.setdefault("finish_per_run", {}).setdefault(run_key, [])
-    if collected and ts - int(collected[-1]["ts"]) < finish_module.DEBOUNCE_MS:
+    if collected and any(abs(ts - int(p["ts"])) < finish_module.DEBOUNCE_MS for p in collected):
         return jsonify({"ok": True, "ignored": True, "reason": "debounce"})
     collected.append({"ts": ts, "mac": mac})
     save_state(st)
@@ -1487,7 +1493,7 @@ def api_post_finish_assign():
     """
     Ordnet einen Zieleinlauf-Druck haendlich einer Bahn zu (index) oder hebt die Zuordnung auf (index = null).
 
-    Hat die Bahn keine eigene Zeit, wird die Zieleinlauf-Zeit als Bahnzeit uebernommen.
+    Nur zum Vergleichen: die Bahnzeit des Laufs aendert sich dadurch nicht (siehe /api/finish/transfer).
     Payload: { "run_key": "3", "lane": "2", "index": 0 | null }
     """
     st = load_state()
@@ -1498,39 +1504,53 @@ def api_post_finish_assign():
     if not run_key or not lane.isdigit():
         return jsonify({"ok": False, "error": "missing run_key or lane"}), 400
     collected = (st.get("finish_per_run") or {}).get(run_key) or []
-    all_presses = st.setdefault("triggers_per_run", {})
-    presses = all_presses.get(run_key) or {}
     manual = st.setdefault("finish_assign", {}).setdefault(run_key, {})
-    current = presses.get(lane)
 
     if index is None:
         manual.pop(lane, None)
-        if current and current.get("src") == FINISH_KEY:
-            del presses[lane]
     else:
         if not isinstance(index, int) or not 0 <= index < len(collected):
             return jsonify({"ok": False, "error": "invalid index"}), 400
         for other, value in list(manual.items()):
             if value == index:
                 del manual[other]
-                other_press = presses.get(other)
-                if other_press and other_press.get("src") == FINISH_KEY:
-                    del presses[other]
         manual[lane] = index
-        if not presses.get(STARTER_KEY):
-            return jsonify({"ok": False, "error": "Lauf wurde nicht gestartet."}), 400
-        if current is None or current.get("src") == FINISH_KEY:
-            presses[lane] = {"ts": int(collected[index]["ts"]), "mac": FINISH_KEY, "src": FINISH_KEY}
-            all_presses[run_key] = presses
+    save_state(st)
+    return jsonify({"ok": True})
 
-    lanes_in_run = [c["Bahn"] for c in (st.get("startcards_per_run") or {}).get(run_key.split("/")[0], [])]
-    if run_key == _attempt_key(int(st.get("current_run") or 0), int(st.get("current_attempt") or 1)):
-        if lanes_in_run and not (set(lanes_in_run) - {k for k, v in presses.items() if v}):
-            if st.get("run_finished_ts") is None:
-                st["run_finished_ts"] = now_ms()
+
+@app.post("/api/finish/transfer")
+def api_post_finish_transfer():
+    """
+    Uebertraegt alle zugeordneten Zieleinlauf-Zeiten eines Versuchs als neue Laufversion (z. B. 5/2).
+
+    Die Version geht in die Ergebnisdatei fuer JAuswertung; die Bahnzeiten des Versuchs bleiben unveraendert.
+    Erneutes Uebertragen aktualisiert dieselbe Version. Payload: { "run_key", "undo": true (= Version zuruecknehmen) }
+    """
+    st = load_state()
+    payload = request.get_json(force=True, silent=True) or {}
+    run_key = str(payload.get("run_key") or "")
+    parsed = _parse_attempt_key(run_key)
+    if parsed is None:
+        return jsonify({"ok": False, "error": "missing run_key"}), 400
+    adopted_all = st.setdefault("finish_adopted", {})
+
+    if payload.get("undo"):
+        adopted_all.pop(run_key, None)
+    else:
+        info = _finish_info(st, run_key)
+        lanes = {
+            lane: info["times_ms"][m["index"]] for lane, m in ((info or {}).get("matches") or {}).items()
+        }
+        if not lanes:
+            return jsonify({"ok": False, "error": "Keine Zieleinlauf-Zeit einer Bahn zugeordnet."}), 400
+        entry = adopted_all.get(run_key)
+        attempt = entry["attempt"] if entry else _next_attempt(st, parsed[0])
+        adopted_all[run_key] = {"attempt": attempt, "lanes": lanes}
     save_state(st)
     _write_heats_xml(st)
-    return jsonify({"ok": True})
+    entry = adopted_all.get(run_key)
+    return jsonify({"ok": True, "label": _attempt_key(parsed[0], entry["attempt"]) if entry else None})
 
 
 @app.post("/api/triggers")
@@ -1853,6 +1873,7 @@ def api_get_run_status():
                 if lane == STARTER_KEY or not press:
                     continue
                 times[str(lane)] = press["ts"] - starter_ts
+        adopted = (st.get("finish_adopted") or {}).get(run_key)
         runs[str(run_key)] = {
             "started": starter_ts is not None,
             "starter_ts": starter_ts,
@@ -1860,6 +1881,13 @@ def api_get_run_status():
             "running": starter_ts is not None and run_key == current_key and st.get("run_finished_ts") is None,
             "stopped_by_starter": run_key in stopped_keys,
             "finish": _finish_info(st, run_key),
+            "adopted": (
+                {
+                    "label": _attempt_key(_parse_attempt_key(run_key)[0], adopted["attempt"]),
+                    "lanes": adopted["lanes"],
+                }
+                if adopted and _parse_attempt_key(run_key) else None
+            ),
         }
     finished = st.get("run_finished_ts")
     next_in = None
@@ -1970,6 +1998,7 @@ def api_test_reset_run():
     (st.get("triggers_per_run") or {}).pop(run_key, None)
     (st.get("finish_per_run") or {}).pop(run_key, None)
     (st.get("finish_assign") or {}).pop(run_key, None)
+    (st.get("finish_adopted") or {}).pop(run_key, None)
     st["stopped_by_starter"] = [k for k in (st.get("stopped_by_starter") or []) if k != run_key]
     st["run_finished_ts"] = None
     save_state(st)
@@ -2009,6 +2038,12 @@ def _heats_for_xml(st: State) -> list[tuple[int, int, dict[int, int]]]:
         if (run > current or run_key == current_key) and not expected <= set(lane_times):
             continue
         heats.append((run, attempt, lane_times))
+    # Uebernommene Zieleinlauf-Zeiten: eigene Unterversion des Laufs, nur mit den uebernommenen Bahnen
+    for run_key, entry in (st.get("finish_adopted") or {}).items():
+        parsed = _parse_attempt_key(run_key)
+        if parsed is None or parsed[0] not in event_of or not entry.get("lanes"):
+            continue
+        heats.append((parsed[0], int(entry["attempt"]), {int(lane): int(ms) for lane, ms in entry["lanes"].items()}))
     return sorted(heats, key=lambda heat: (heat[0], heat[1]))
 
 
