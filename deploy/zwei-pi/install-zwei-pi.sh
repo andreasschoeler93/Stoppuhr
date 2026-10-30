@@ -17,6 +17,16 @@ case "$ROLLE" in
   *) echo "Aufruf: $0 koffer|bad"; exit 1 ;;
 esac
 
+case "$ROLLE" in
+  koffer) DEFAULT_AP_CHANNEL=1 ;;
+  bad)    DEFAULT_AP_CHANNEL=11 ;;
+esac
+AP_CHANNEL="${AP_CHANNEL:-$DEFAULT_AP_CHANNEL}"
+case "$AP_CHANNEL" in
+  1|6|11) ;;
+  *) echo "AP_CHANNEL muss 1, 6 oder 11 sein."; exit 1 ;;
+esac
+
 AP_SSID="${AP_SSID:-}"
 AP_PSK="${AP_PSK:-}"
 
@@ -54,6 +64,7 @@ if ! { ip -4 addr show br0 2>/dev/null | grep -q "$OWN_IP" && nmcli -t -f NAME c
     vxlan.remote "${VXLAN_REMOTE:-239.50.50.50}" vxlan.parent eth0 vxlan.destination-port 4789 \
     connection.master br0 connection.slave-type bridge
   sudo nmcli con add type wifi ifname wlan0 con-name ap ssid "$AP_SSID" mode ap wifi.hidden yes \
+    802-11-wireless.band bg 802-11-wireless.channel "$AP_CHANNEL" \
     wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$AP_PSK" connection.master br0 connection.slave-type bridge
   if ! { sudo nmcli con up br0 && sudo nmcli con up vxlan0 && sudo nmcli con up ap; }; then
     sleep 3
@@ -124,7 +135,8 @@ sudo apt-get install -y dnsmasq
 if [ -f /etc/dnsmasq.d/taster.conf ]; then
   sudo mkdir -p /root/dnsmasq-alt
   sudo mv /etc/dnsmasq.d/taster.conf /root/dnsmasq-alt/
-fiif [ "$ROLLE" = "koffer" ]; then DHCP_VON=100; DHCP_BIS=149; else DHCP_VON=150; DHCP_BIS=199; fi
+fi
+if [ "$ROLLE" = "koffer" ]; then DHCP_VON=100; DHCP_BIS=149; else DHCP_VON=150; DHCP_BIS=199; fi
 sudo tee /etc/dnsmasq.d/stoppuhr.conf >/dev/null <<EOF
 interface=br0
 bind-interfaces

@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.11.3 | 2026-10-30 | Zwei-Pi-WLAN: Die Taster-Zugangspunkte sind fest auf 2,4 GHz eingestellt (Koffer Kanal 1, Bad Kanal 11). Neues Skript `wlan-kanal-setzen.sh` stellt auch vorhandene Installationen um; Kanäle 1, 6 oder 11 sind wählbar. Außerdem Syntaxfehler im Zwei-Pi-Installer behoben. |
 | v0.11.2 | 2026-10-29 | Vitaldaten: CPU-Temperatur und CPU-Last der Pis stehen gemeinsam in einem Diagramm (Temperatur durchgezogen, Last gestrichelt, Skala 0–100). |
 | v0.11.1 | 2026-10-29 | Vitaldaten: Das Diagramm „Pi CPU-Last“ entfällt. Es bleibt ein Pi-Diagramm (CPU-Temperatur, beide Pis), die Box „Zustand“ läuft über die volle Breite. |
 | v0.11.0 | 2026-10-29 | Vitaldaten: Die Pis erscheinen im Vitaldaten-Tab. Neue Diagramme „Pi CPU-Temperatur“ und „Pi CPU-Last“ (je Pi eine Linie, Verlauf wie bei den Tastern), und die Box „Zustand der Taster und Pis“ zeigt zusätzlich Status, CPU, Speicher, SD-Karte und Laufzeit beider Pis. Neu: `/api/vitals/pi`. |

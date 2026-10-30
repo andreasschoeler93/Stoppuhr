@@ -13,6 +13,7 @@ Die Oberfläche erreichst du danach unter `http://stoppuhr:1999` (oder `http://1
 | Hostname | `koffer-pi` | `bad-pi` |
 | Feste Adresse (Taster-Netz) | 192.168.50.11 | 192.168.50.12 |
 | Eigenes WLAN (versteckt, WPA2) | Koffer-WLAN | Bad-WLAN |
+| WLAN-Band/Kanal | 2,4 GHz / Kanal 1 | 2,4 GHz / Kanal 11 |
 | DHCP-Bereich | .100–.149 | .150–.199 |
 | Normalerweise | arbeitet | Kopie, Notbetrieb |
 
@@ -76,6 +77,8 @@ cd ~/apps/stoppuhr
 AP_SSID='Bad-WLAN-Name' AP_PSK='Bad-Kennwort' bash deploy/zwei-pi/install-zwei-pi.sh bad
 ```
 
+Die Zugangspunkte sind auf 2,4 GHz festgelegt. Koffer verwendet Kanal 1, Bad Kanal 11. Die Kanäle 1, 6 und 11 sind die üblichen nicht überlappenden Kanäle. Ein anderer Kanal kann beim Installieren über `AP_CHANNEL=6` gesetzt werden; einen Kanal nur nach einem Scan der WLAN-Umgebung vor Ort wählen.
+
 Das Skript erledigt:
 
 - Bridge `br0` mit fester Adresse, versteckter WLAN-Zugangspunkt (`ap`) und VXLAN-Tunnel `vxlan0` zum anderen Pi (über `eth0`, nur Taster-Verkehr). `eth0` selbst bleibt per DHCP am Router. Kommt die Bridge nicht hoch, wird das Taster-Netz wieder entfernt.
@@ -88,6 +91,17 @@ Das Skript erledigt:
 - schaltet den Dienst `stoppuhr` auf Start durch keepalived um
 
 Andere Adressen oder ein anderer Name: `VIP=`, `KOFFER_IP=`, `BAD_IP=`, `NAME=` vor den Aufruf setzen (auf beiden Pis gleich).
+
+### Bereits eingerichtete Pis auf 2,4 GHz umstellen
+
+Nach dem Software-Update auf **jedem Pi einzeln per Ethernet-SSH oder am Monitor** ausführen, nicht während eines Wettkampfs. Das Skript setzt das WLAN-Band und startet den jeweiligen Zugangspunkt neu; die Tasterverbindung ist dabei kurz unterbrochen.
+
+```bash
+cd ~/apps/stoppuhr
+sudo bash deploy/zwei-pi/wlan-kanal-setzen.sh
+```
+
+Standardmäßig erhält der Koffer-Pi Kanal 1 und der Bad-Pi Kanal 11. Optional kann als Argument 1, 6 oder 11 übergeben werden. Vor einer abweichenden Kanalwahl die Belegung vor Ort prüfen. Der Tunnel zwischen den Pis läuft über Ethernet und wird durch die Änderung nicht auf 2,4 GHz umgestellt.
 
 ## 5. Prüfen
 

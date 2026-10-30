@@ -21,6 +21,7 @@ Das Taster-Netz ist abgeschottet: `eth0` hängt per DHCP am Router und gehört *
 | Bad-Pi (Notbetrieb + Kopie) | 192.168.50.12 |
 
 - Beide Pis sind per Kabel verbunden. Jeder macht sein WLAN als Zugangspunkt (versteckt, WPA2) und hängt es in die Bridge `br0`. Alle Geräte liegen dadurch im selben Netz.
+- Die Taster funken nur auf 2,4 GHz. Die Zugangspunkte sind deshalb fest auf 2,4 GHz eingestellt: Koffer-Pi Kanal 1, Bad-Pi Kanal 11. Die Kanäle 1, 6 und 11 sind nicht überlappend; vor Ort kann ein WLAN-Scan zeigen, ob ein anderer dieser Kanäle weniger belegt ist.
 - Die VIP liegt immer auf dem Pi, der gerade arbeitet (keepalived). Die Taster merken von einem Wechsel nichts, ihre Wiederholungen und die Warteschlange fangen die Sekunden dazwischen ab.
 - Der Koffer-Pi arbeitet normalerweise. Der Bad-Pi ist nur Zugangspunkt und hält über Redis-Replikation eine laufende Kopie.
 - Fällt der Koffer-Pi aus oder startet neu, übernimmt der Bad-Pi automatisch (Stoppuhr-Dienst startet dort, Kopie wird zum Hauptbestand). Kommt der Koffer-Pi zurück, gleicht er zuerst die Daten vom Bad-Pi ab und übernimmt erst nach 10 s Wartezeit, wenn alles synchron ist.
@@ -37,6 +38,7 @@ Taster ohne Rolle sind im Koffer-WLAN. Mit Rollenzuweisung wechseln sie sofort i
 2. Bridge und WLAN-Zugangspunkt: das erledigt `install-zwei-pi.sh` selbst, wenn `AP_SSID` und `AP_PSK` gesetzt sind
    (`AP_SSID=KOFFER-SSID AP_PSK=PASSWORT bash deploy/zwei-pi/install-zwei-pi.sh koffer`). Kommt die Bridge nicht hoch, stellt es
    den alten Zustand wieder her. Per WLAN-SSH bricht es ab (Umbau würde die Sitzung kappen; `FORCE=1` übergeht das), besser per Kabel.
+   Der Koffer-Pi verwendet standardmäßig Kanal 1, der Bad-Pi Kanal 11. Mit `AP_CHANNEL=6` lässt sich beim Einrichten ein anderer der üblichen überlappungsfreien 2,4-GHz-Kanäle wählen.
    Von Hand (Beispiel Koffer-Pi, beim Bad-Pi IP `.12`, andere SSID):
 
 ```bash
@@ -44,9 +46,21 @@ sudo nmcli con add type bridge ifname br0 con-name br0 ipv4.method manual ipv4.a
 sudo nmcli con add type vxlan ifname vxlan0 con-name vxlan0 vxlan.id 50 vxlan.remote 239.50.50.50 \
   vxlan.parent eth0 vxlan.destination-port 4789 connection.master br0 connection.slave-type bridge
 sudo nmcli con add type wifi ifname wlan0 con-name ap ssid KOFFER-SSID mode ap wifi.hidden yes \
+  802-11-wireless.band bg 802-11-wireless.channel 1 \
   wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'PASSWORT' connection.master br0 connection.slave-type bridge
 sudo nmcli con up br0
 ```
+
+### Bestehende Pis umstellen
+
+Nach einem Update das folgende Skript **auf beiden Pis einzeln per Ethernet-SSH oder am Monitor** ausführen, nicht während eines Wettkampfs. Es setzt das WLAN-Band und den Kanal und startet den jeweiligen Zugangspunkt neu. Der WLAN-Zugriff der Taster kann dabei kurz unterbrochen werden.
+
+```bash
+cd ~/apps/stoppuhr
+sudo bash deploy/zwei-pi/wlan-kanal-setzen.sh
+```
+
+Standard: Koffer-Pi Kanal 1, Bad-Pi Kanal 11. Ein anderer Kanal kann als Argument angegeben werden (nur 1, 6 oder 11), zum Beispiel `sudo bash deploy/zwei-pi/wlan-kanal-setzen.sh 6`. Vor einer abweichenden Kanalwahl beide Pis mit einem WLAN-Scanner am Einsatzort prüfen. Der Pi-Pi-Tunnel läuft über Ethernet; diese Änderung betrifft nur die Taster-WLANs.
 
 3. DHCP und Name: übernimmt `install-zwei-pi.sh` (nächster Schritt) per `dnsmasq`. Koffer vergibt `.100`–`.149`, Bad `.150`–`.199`,
    damit auch bei Ausfall eines Pi Adressen vergeben werden. Beide antworten auf den Namen **`stoppuhr`** mit der gemeinsamen Adresse
