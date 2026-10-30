@@ -973,8 +973,10 @@ function renderButtonList() {
     let slotLabel = "–";
     if (slotInfo.slot) {
       slotLabel = slotInfo.slot + (slotInfo.role.endsWith("pending") ? " (Bereitschaft)" : " (aktiv)");
+    } else if (btn.role === "starter") {
+      slotLabel = "STARTER (aktiv)";
     } else if (btn.pending_lane === "starter") {
-      slotLabel = "START (Bereitschaft)";
+      slotLabel = "STARTER (Bereitschaft)";
     }
 
     const letter = btn.letter || "?";

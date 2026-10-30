@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.12.6 | 2026-10-30 | Taster-Seite: Der als Starter zugewiesene Taster zeigt „STARTER (aktiv)“ statt „–“. |
 | v0.12.5 | 2026-10-30 | Einstellungen: Neue Karte „Grenzwerte“. Die gelben und roten Schwellwerte für Taster, Pis und Ladekoffer (Akku, Spannung, Temperatur, Luftfeuchte, WLAN, CPU, Speicher, SD-Karte) sind einstellbar und lassen sich auf Standardwerte zurücksetzen. Neu: `GET/POST /api/limits`, Modul `backend/limits.py`. |
 | v0.12.4 | 2026-10-30 | Oberfläche: Auf der Seite Stoppuhr werden Taster-Karten, Starter und Bahnen gelb oder rot hinterlegt, wenn ein Wert den Grenzwert erreicht oder ein Taster mit Rolle offline ist. Die einzelnen Werte sind ebenfalls farbig. |
 | v0.12.3 | 2026-10-30 | Oberfläche: Roter Balken oben, wenn ein Taster mit Rolle (Starter oder Bahn) offline ist. Taster ohne Rolle lösen keine Meldung aus. |
