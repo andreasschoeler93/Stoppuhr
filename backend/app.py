@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.15.0
+# Version: v0.16.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.15.0"
+APP_VERSION: Final[str] = "0.16.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -190,6 +190,15 @@ def _auto_next_delay_ms(st: State) -> int:
         return max(0, int(st.get("settings", {}).get("auto_next_run_s", 10))) * 1000
     except (TypeError, ValueError):
         return 10_000
+
+
+def _is_range_test_taster(st: State, mac: str) -> bool:
+    """True, wenn der Funktest laeuft und dieser Taster der gewaehlte Buchstabe ist."""
+    settings = st.get("settings", {})
+    letter = str(settings.get("range_test_letter") or "").strip().upper()
+    if not letter or str(settings.get("range_test_on", "0")) != "1":
+        return False
+    return any(t.get("mac") == mac and str(t.get("letter") or "").upper() == letter for t in st.get("tasters", []))
 
 
 def _int_setting(st: State, key: str, default: int) -> int:
@@ -477,6 +486,15 @@ def api_set_settings() -> ResponseReturnValue:
             if not 0 <= value <= upper:
                 return jsonify({"ok": False, "error": f"{key} must be between 0 and {upper}"}), 400
             settings[key] = str(value)
+    if "range_test_letter" in payload:
+        letter = str(payload["range_test_letter"] or "").strip().upper()
+        if letter and (len(letter) != 1 or letter not in TASTER_LETTERS):
+            return jsonify({"ok": False, "error": "Ungültiger Tasterbuchstabe."}), 400
+        settings["range_test_letter"] = letter
+    if "range_test_on" in payload:
+        settings["range_test_on"] = "1" if payload["range_test_on"] in (True, 1, "1", "true") else "0"
+        if settings["range_test_on"] == "1" and not settings.get("range_test_letter"):
+            return jsonify({"ok": False, "error": "Bitte zuerst einen Tasterbuchstaben eingeben."}), 400
     if "shutdown_grace_s" in payload:
         try:
             shutdown_grace_s = int(payload["shutdown_grace_s"])
@@ -1655,6 +1673,8 @@ def api_post_triggers():
         ts_val = now_ms()
     else:
         mac_norm = str(mac).strip()
+        if _is_range_test_taster(st, mac_norm):
+            return jsonify({"ok": True, "ignored": True, "reason": "range_test"})
         lane = _lane_for_mac(st, mac_norm)
         # Zeitstempel des Tasters auf die Serveruhr umrechnen. Kleine Versaetze sind nur
         # Netzwerklatenz (je Taster verschieden) und wuerden die Zeiten verfaelschen; korrigiert
@@ -1830,7 +1850,13 @@ def api_get_display():
     }
     out.update(_ota_offer_for(st, mac))
     out.update(_wifi_offer_for(st, mac))
-    if lane is None:
+    if mac and _is_range_test_taster(st, mac):
+        # Funktest: Taster zeigt nur die Signalstaerke (Rolle "range"); die Schwellen stammen aus den Grenzwerten
+        warn, crit = limits_module.merged(st.get("settings", {}).get("limits"))["taster"]["rssi"]["values"]
+        out["role"] = "range"
+        out["rssi_warn"] = int(warn)
+        out["rssi_crit"] = int(crit)
+        return jsonify(out)
         pending_lane = next(
             (k for k, v in ((st.get("assignments") or {}).get("pending") or {}).items() if v == mac),
             None,

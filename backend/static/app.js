@@ -650,6 +650,12 @@ async function loadSettingsIntoUI() {
   byId("starterIsFinishQuick").checked = s.starter_is_finish === "1";
   byId("lowBatteryPctInput").value = s.low_battery_pct ?? "10";
   byId("lowBatteryMinInput").value = s.low_battery_min ?? "5";
+  const rangeOn = s.range_test_on === "1";
+  if (document.activeElement !== byId("rangeTestLetter")) byId("rangeTestLetter").value = s.range_test_letter || "";
+  byId("btnRangeTest").textContent = rangeOn ? "Funktest beenden" : "Funktest starten";
+  byId("btnRangeTest").classList.toggle("btn-danger", rangeOn);
+  byId("btnRangeTest").classList.toggle("btn-outline-primary", !rangeOn);
+  byId("rangeTestState").textContent = rangeOn ? `Läuft für Taster ${s.range_test_letter}` : "";
 }
 
 async function loadStartcardsFromBackend() {
@@ -1410,6 +1416,16 @@ async function init() {
       alert("Speichern fehlgeschlagen: " + e.message);
       await loadSettingsIntoUI();
     }
+  });
+
+  byId("btnRangeTest").addEventListener("click", async () => {
+    const on = byId("btnRangeTest").textContent.includes("starten");
+    try {
+      await apiPost("/api/settings", { range_test_letter: byId("rangeTestLetter").value, range_test_on: on });
+    } catch (e) {
+      alert("Funktest: " + e.message);
+    }
+    await loadSettingsIntoUI();
   });
 
   byId("btnSaveSettings").addEventListener("click", async () => {

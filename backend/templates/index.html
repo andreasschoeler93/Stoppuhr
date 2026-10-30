@@ -252,6 +252,15 @@
               <input type="number" min="1" max="86400" step="1" id="shutdownGraceInput" class="form-control" value="10">
               <div class="form-text">Zeit, in der die Taster den Abschaltbefehl vom Server abrufen können (1–86400 Sekunden).</div>
             </div>
+            <div class="col-12">
+              <label class="form-label">Funktest (Reichweite)</label>
+              <div class="d-flex gap-2 align-items-center flex-wrap">
+                <input type="text" maxlength="1" id="rangeTestLetter" class="form-control form-control-sm text-uppercase" style="width:4.5rem" placeholder="A–J">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btnRangeTest">Funktest starten</button>
+                <span class="small text-muted" id="rangeTestState"></span>
+              </div>
+              <div class="form-text">Der gewählte Taster wechselt ins Bad-WLAN und zeigt die Signalstärke (dBm) auf dem Display; bei kritischem Signal piept er. Die Schwellen stammen aus den Grenzwerten „Taster: WLAN-Signal“. Tasten sind währenddessen ohne Wirkung. Der Taster muss online sein.</div>
+            </div>
             <div class="col-md-6">
               <label class="form-label">Taster: Akku-Warnung ab (%)</label>
               <input type="number" min="0" max="100" step="1" id="lowBatteryPctInput" class="form-control" value="10">
