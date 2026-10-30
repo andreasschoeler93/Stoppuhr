@@ -648,6 +648,8 @@ async function loadSettingsIntoUI() {
   byId("shutdownGraceInput").value = s.shutdown_grace_s ?? "10";
   byId("starterIsFinishInput").checked = s.starter_is_finish === "1";
   byId("starterIsFinishQuick").checked = s.starter_is_finish === "1";
+  byId("lowBatteryPctInput").value = s.low_battery_pct ?? "10";
+  byId("lowBatteryMinInput").value = s.low_battery_min ?? "5";
 }
 
 async function loadStartcardsFromBackend() {
@@ -1420,7 +1422,9 @@ async function init() {
         auto_next_run_s: byId("autoNextInput").value,
         stop_lockout_s: byId("stopLockoutInput").value,
         shutdown_grace_s: byId("shutdownGraceInput").value,
-        starter_is_finish: byId("starterIsFinishInput").checked
+        starter_is_finish: byId("starterIsFinishInput").checked,
+        low_battery_pct: byId("lowBatteryPctInput").value,
+        low_battery_min: byId("lowBatteryMinInput").value
       });
       // mirror to main tab
       await loadSettingsIntoUI();

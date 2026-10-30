@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.15.0 | 2026-10-30 | Neue Einstellungen für die Taster-Akkuwarnung: „Akku-Warnung ab (%)“ (Standard 10, 0 = aus) und „automatisch ausschalten nach (Minuten)“ (Standard 5, 0 = nie). Die Werte gehen über `/api/display` an die Taster (Firmware ab v0.14.0). |
 | v0.14.2 | 2026-10-30 | „Starter ist auch Zieleinlauf“ als Kontrollkästchen direkt unter der Starter-Zeile auf der Startseite (wirkt sofort, ohne Speichern). |
 | v0.14.1 | 2026-10-30 | Fix: Syntaxfehler in `app.js` aus v0.14.0 (Oberfläche blieb leer, keine Versionsanzeige). |
 | v0.14.0 | 2026-10-30 | Neu: einstellbarer Grenzwert „Zieleinlauf: Abweichung zur Bahnzeit“ (Einstellungen → Grenzwerte, Standard gelb ab 0,5 s, rot ab 1 s, je ±). Neu: Option „Starter / Zieleinlauf“ (Einstellungen): der Starter-Taster behält die Starteransicht, sammelt aber nach dem Start jeden weiteren Druck als Zieleinlauf-Zeit (der Doppeldruck-Stopp entfällt dann). |

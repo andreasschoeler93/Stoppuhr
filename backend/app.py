@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.14.2
+# Version: v0.15.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.14.2"
+APP_VERSION: Final[str] = "0.15.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -137,6 +137,8 @@ def _default_state() -> State:
             "stop_lockout_s": "5",
             "shutdown_grace_s": "10",
             "starter_is_finish": "0",
+            "low_battery_pct": "10",
+            "low_battery_min": "5",
         },
         "shutdown_until_ms": 0,
         "start_locked_until_ms": 0,
@@ -188,6 +190,13 @@ def _auto_next_delay_ms(st: State) -> int:
         return max(0, int(st.get("settings", {}).get("auto_next_run_s", 10))) * 1000
     except (TypeError, ValueError):
         return 10_000
+
+
+def _int_setting(st: State, key: str, default: int) -> int:
+    try:
+        return int(st.get("settings", {}).get(key, default))
+    except (TypeError, ValueError):
+        return default
 
 
 def _stop_lockout_ms(st: State) -> int:
@@ -459,6 +468,15 @@ def api_set_settings() -> ResponseReturnValue:
                 return jsonify({"ok": False, "error": f"{key} must be a number"}), 400
     if "starter_is_finish" in payload:
         settings["starter_is_finish"] = "1" if payload["starter_is_finish"] in (True, 1, "1", "true") else "0"
+    for key, upper in (("low_battery_pct", 100), ("low_battery_min", 1440)):
+        if key in payload:
+            try:
+                value = int(payload[key])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{key} must be a number"}), 400
+            if not 0 <= value <= upper:
+                return jsonify({"ok": False, "error": f"{key} must be between 0 and {upper}"}), 400
+            settings[key] = str(value)
     if "shutdown_grace_s" in payload:
         try:
             shutdown_grace_s = int(payload["shutdown_grace_s"])
@@ -1793,6 +1811,8 @@ def api_get_display():
     out: dict[str, Any] = {
         "role": "none",
         "shutdown": now < int(st.get("shutdown_until_ms", 0) or 0),
+        "low_battery_pct": _int_setting(st, "low_battery_pct", 10),
+        "low_battery_min": _int_setting(st, "low_battery_min", 5),
         "lane": None,
         "run": run,
         "attempt": attempt,
