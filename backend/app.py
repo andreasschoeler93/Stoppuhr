@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.21.0
+# Version: v0.21.1
 # Status: stable-beta
 # ----------------------------------------
 
@@ -40,7 +40,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.21.0"
+APP_VERSION: Final[str] = "0.21.1"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -253,7 +253,13 @@ def _maybe_advance_run(st: State) -> None:
     """Springt in den naechsten Lauf, wenn der abgeschlossene Lauf lange genug angezeigt wurde."""
     finished = st.get("run_finished_ts")
     if finished is not None and now_ms() - int(finished) >= _auto_next_delay_ms(st):
-        _advance_run(st)
+        # Lesende Routen laufen ohne Sperre; nur das Weiterschalten sperrt und liest neu
+        with _STATE_LOCK:
+            fresh = load_state()
+            if fresh.get("run_finished_ts") is not None:
+                _advance_run(fresh)
+            st.clear()
+            st.update(fresh)
 
 
 def _parse_attempt_key(key: str) -> Optional[tuple[int, int]]:
@@ -388,6 +394,9 @@ _UNLOCKED_PREFIXES: Final[tuple[str, ...]] = (
 @app.before_request
 def _state_lock_enter() -> None:
     path = request.path
+    # Reine Lese-Abfragen (Browser, Taster-Displays) blockieren nicht; sie schreiben den Zustand nicht
+    if request.method in ("GET", "HEAD") and path != "/api/network-status":
+        return
     if path.startswith("/api/") and not path.startswith(_UNLOCKED_PREFIXES):
         g.state_locked = _STATE_LOCK.acquire(timeout=_STATE_LOCK_TIMEOUT_S)
 
