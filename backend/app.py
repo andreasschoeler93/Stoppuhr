@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.20.0
+# Version: v0.21.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -40,7 +40,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.20.0"
+APP_VERSION: Final[str] = "0.21.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -630,6 +630,9 @@ def api_end_competition() -> ResponseReturnValue:
             logger.exception("Archivieren fehlgeschlagen")
             return jsonify({"ok": False, "error": f"Archivieren fehlgeschlagen: {exc}"}), 500
     st["competition_since_ms"] = now_ms()
+    # Der Vitalverlauf bleibt erhalten; die Buchstaben merken, damit er beschriftet bleibt
+    for t in st.get("tasters", []):
+        vitals_history.set_label(redis_store, str(t.get("mac")), t.get("letter"))
 
     st["shutdown_until_ms"] = now_ms() + shutdown_grace_s * 1000
     st["startcards"] = {
@@ -1009,6 +1012,9 @@ def api_post_vitals():
         offsets[mac] = new_off if old is None or new_off < old else int(old + (new_off - old) * 0.1)
     save_state(st)
     vitals_history.add(redis_store, str(mac), new_vital["ts"], dict(new_vital))
+    known_taster = next((t for t in st["tasters"] if t.get("mac") == mac), None)
+    if known_taster:
+        vitals_history.set_label(redis_store, str(mac), known_taster.get("letter"))
     return jsonify({"ok": True, "vital": new_vital})
 
 
@@ -1142,6 +1148,13 @@ def api_post_alert_state() -> ResponseReturnValue:
 def api_get_charger():
     """Zustand des Ladekoffers mit Statusmeldungen; known=false, solange nie etwas gemeldet wurde."""
     return jsonify(ladekoffer.evaluate(ladekoffer.load(redis_store), now_ms()))
+
+
+@app.get("/api/vitals/known")
+def api_vitals_known():
+    """Taster mit Verlauf (auch nach Wettkampfende, wenn sie nicht mehr angemeldet sind)."""
+    hours = min(max(request.args.get("hours", default=KEEP_HOURS_DEFAULT, type=float), 0.1), vitals_history.KEEP_HOURS)
+    return jsonify({"tasters": vitals_history.known(redis_store, now_ms() - int(hours * 3600 * 1000))})
 
 
 @app.get("/api/vitals/history")

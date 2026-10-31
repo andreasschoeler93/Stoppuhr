@@ -33,6 +33,35 @@ def add(r: Any, mac: str, ts_ms: int, vital: dict[str, Any]) -> None:
         pass
 
 
+LABELS_KEY: Final[str] = "VITALS_LABELS"
+
+
+def set_label(r: Any, mac: str, letter: Any) -> None:
+    """Merkt sich den Buchstaben je MAC, damit der Verlauf auch nach Wettkampfende beschriftet bleibt."""
+    if not letter:
+        return
+    try:
+        r.hset(LABELS_KEY, mac, str(letter))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def known(r: Any, since_ms: int = 0) -> list[dict[str, Any]]:
+    """Alle Taster mit Verlauf im Zeitraum (auch solche, die gerade nicht angemeldet sind)."""
+    out: list[dict[str, Any]] = []
+    try:
+        labels = r.hgetall(LABELS_KEY) or {}
+        for key in r.scan_iter(match=KEY_PREFIX + "*"):
+            last = r.lindex(key, -1)
+            if last is None or json.loads(last)[0] < since_ms:
+                continue
+            mac = key[len(KEY_PREFIX):]
+            out.append({"mac": mac, "letter": labels.get(mac)})
+    except Exception:  # noqa: BLE001
+        return []
+    return sorted(out, key=lambda e: (e["letter"] is None, str(e["letter"] or ""), e["mac"]))
+
+
 def history(r: Any, mac: str, since_ms: int = 0) -> list[list[Any]]:
     try:
         raw = r.lrange(KEY_PREFIX + mac, 0, -1)

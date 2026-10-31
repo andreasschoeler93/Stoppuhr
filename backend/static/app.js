@@ -99,15 +99,20 @@ async function refreshVitals() {
   }
   const list = ((await apiGet("/api/taster")).tasters || [])
     .slice().sort((a, b) => String(a.letter || "~").localeCompare(String(b.letter || "~")));
+  // Auch Taster zeigen, die nach Wettkampfende nicht mehr angemeldet sind, deren Verlauf aber noch da ist
+  const known = (await apiGet("/api/vitals/known?hours=" + VITALS_MAX_H).catch(() => ({ tasters: [] }))).tasters || [];
+  const plotted = list.map(t => ({ mac: t.mac, letter: t.letter, old: false }))
+    .concat(known.filter(k => !list.some(t => t.mac === k.mac)).map(k => ({ mac: k.mac, letter: k.letter, old: true })))
+    .sort((a, b) => String(a.letter || "~").localeCompare(String(b.letter || "~")));
   const now = Date.now();
   const t1 = vitalsEnd ?? now;
   // Der Server liefert ab "jetzt minus Stunden"; bei verschobenem Fenster entsprechend weiter zurueck
   const fetchH = Math.min(VITALS_MAX_H, (now - (t1 - win)) / 3600000);
   let starts = [];
-  const series = await Promise.all(list.map(async (t, i) => {
+  const series = await Promise.all(plotted.map(async (t, i) => {
     const d = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(t.mac)}&hours=${fetchH}`).catch(() => ({ points: [] }));
     if (d.starts && d.starts.length) starts = d.starts;
-    return { label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
+    return { label: `Taster ${t.letter || "?"}${t.old ? " (früher)" : ""}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
   }));
   const pi = await apiGet(`/api/vitals/pi?hours=${fetchH}`).catch(() => ({ nodes: [] }));
   if (!starts.length && pi.starts) starts = pi.starts;
