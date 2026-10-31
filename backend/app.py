@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.17.0
+# Version: v0.18.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -26,6 +26,7 @@ import redis
 from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, session
 from flask.sessions import SecureCookieSessionInterface
 from flask.typing import ResponseReturnValue
+import archive
 import auth
 import firmware_store
 import ladekoffer
@@ -38,7 +39,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.17.0"
+APP_VERSION: Final[str] = "0.18.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -590,6 +591,18 @@ def api_end_competition() -> ResponseReturnValue:
     if not 1 <= shutdown_grace_s <= 86_400:
         return jsonify({"ok": False, "error": "invalid shutdown_grace_s setting"}), 500
 
+    payload = request.get_json(force=True, silent=True) or {}
+    name = str(payload.get("name") or "").strip()[:80]
+    archive_id = None
+    if name:
+        # Erst sichern, dann loeschen: schlaegt das Speichern fehl, bleibt der Wettkampf unveraendert
+        try:
+            archive_id = _archive_competition(st, name)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Archivieren fehlgeschlagen")
+            return jsonify({"ok": False, "error": f"Archivieren fehlgeschlagen: {exc}"}), 500
+    st["competition_since_ms"] = now_ms()
+
     st["shutdown_until_ms"] = now_ms() + shutdown_grace_s * 1000
     st["startcards"] = {
         "loaded": False,
@@ -624,10 +637,90 @@ def api_end_competition() -> ResponseReturnValue:
     return jsonify(
         {
             "ok": True,
+            "archive_id": archive_id,
             "shutdown_until_ms": st["shutdown_until_ms"],
             "shutdown_grace_s": shutdown_grace_s,
         }
     )
+
+
+def _archive_competition(st: State, name: str) -> str:
+    """Sichert Ergebnisse, Rohdaten und Vitalverlauf des laufenden Wettkampfs im Archiv."""
+    ended = now_ms()
+    since = int(st.get("competition_since_ms") or 0)
+    heats = _heats_for_xml(st)
+    tasters = [{"mac": t.get("mac"), "letter": t.get("letter"), "name": t.get("name")} for t in st.get("tasters", [])]
+    competition: dict[str, Any] = {
+        "id": str(ended),
+        "name": name,
+        "since_ts": since,
+        "ended_ts": ended,
+        "app_version": APP_VERSION,
+        "heats": [[run, attempt, {str(lane): ms for lane, ms in times.items()}] for run, attempt, times in heats],
+        "xml": create_xml_heats(heats),
+        "startcards_per_run": st.get("startcards_per_run") or {},
+        "tasters": tasters,
+        "vitals": {
+            str(t["mac"]): vitals_history.history(redis_store, str(t["mac"]), since) for t in tasters if t["mac"]
+        },
+        "pi": {n: vitals_history.history_pi(redis_store, n, since) for n in ("Koffer-Pi", "Bad-Pi", "Pi")},
+        "starts": vitals_history.starts(redis_store, since),
+        "raw": {
+            key: st.get(key)
+            for key in (
+                "triggers_per_run", "finish_per_run", "finish_assign", "finish_parked", "finish_adopted",
+                "stopped_by_starter", "aborted_attempts", "assignments",
+            )
+        },
+    }
+    competition["pi"] = {n: pts for n, pts in competition["pi"].items() if pts}
+    archive.save(redis_store, competition)
+    return competition["id"]
+
+
+@app.get("/api/archive")
+def api_archive_list() -> ResponseReturnValue:
+    return jsonify({"items": archive.list_all(redis_store)})
+
+
+@app.get("/api/archive/<cid>")
+def api_archive_get(cid: str) -> ResponseReturnValue:
+    data = archive.load(redis_store, cid)
+    if data is None:
+        return jsonify({"ok": False, "error": "Wettkampf nicht gefunden."}), 404
+    data.pop("raw", None)  # Rohdaten bleiben im Archiv, die Oberflaeche braucht sie nicht
+    return jsonify(data)
+
+
+@app.get("/api/archive/<cid>/heats.xml")
+def api_archive_xml(cid: str) -> ResponseReturnValue:
+    data = archive.load(redis_store, cid)
+    if data is None:
+        return jsonify({"ok": False, "error": "Wettkampf nicht gefunden."}), 404
+    return Response(
+        data.get("xml") or "",
+        mimetype="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="heats-{cid}.xml"'},
+    )
+
+
+@app.get("/api/archive/<cid>/raw.json")
+def api_archive_raw(cid: str) -> ResponseReturnValue:
+    data = archive.load(redis_store, cid)
+    if data is None:
+        return jsonify({"ok": False, "error": "Wettkampf nicht gefunden."}), 404
+    return Response(
+        json.dumps(data, ensure_ascii=False),
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="wettkampf-{cid}.json"'},
+    )
+
+
+@app.delete("/api/archive/<cid>")
+def api_archive_delete(cid: str) -> ResponseReturnValue:
+    if not archive.delete(redis_store, cid):
+        return jsonify({"ok": False, "error": "Wettkampf nicht gefunden."}), 404
+    return jsonify({"ok": True})
 
 
 @app.get("/api/runs")
@@ -900,7 +993,56 @@ def api_post_charger():
     # Der Server-Zeitstempel zaehlt, die Platine hat keine Uhr
     status["ts"] = now_ms()
     ladekoffer.save(redis_store, status)
-    return jsonify({"ok": True, "wake": _wake_config(load_state())})
+    st = load_state()
+    return jsonify({"ok": True, "wake": _wake_config(st), "beep": _beep_config(st)})
+
+
+ALERT_STATE_KEY: Final[str] = "ALERT_STATE"
+ALERT_STALE_MS: Final[int] = 30_000
+
+
+def _alert_state() -> dict[str, Any]:
+    raw = redis_store.get(ALERT_STATE_KEY)
+    try:
+        data = json.loads(raw) if raw else {}
+    except ValueError:
+        data = {}
+    return data if isinstance(data, dict) else {}
+
+
+def _beep_config(st: State) -> dict[str, Any]:
+    """Ton fuer den Pieper des Ladekoffers: gelb = kurzer Piepton bei neuer Meldung, rot = langer Ton im Intervall."""
+    state = _alert_state()
+    # Meldet kein Dashboard mehr (Laptop zu), gibt es auch keine Meldungen
+    fresh = now_ms() - int(state.get("ts") or 0) <= ALERT_STALE_MS
+    settings = st.get("settings", {})
+    return {
+        "yellow_on": 1 if fresh and settings.get("alert_beep_yellow", "1") == "1" else 0,
+        "yellow_seq": int(state.get("yellow_seq") or 0),
+        "red_on": 1 if fresh and state.get("red") and settings.get("alert_beep_red", "1") == "1" else 0,
+        "red_ms": _int_setting(st, "alert_red_len_s", 2) * 1000,
+        "red_every_ms": _int_setting(st, "alert_red_every_s", 10) * 1000,
+    }
+
+
+@app.post("/api/alert-state")
+def api_post_alert_state() -> ResponseReturnValue:
+    """Das Dashboard meldet seine aktuellen gelben/roten Meldungen; der Ladekoffer holt sich daraus den Ton."""
+    payload = request.get_json(force=True, silent=True) or {}
+
+    def texts(key: str) -> list[str]:
+        items = payload.get(key)
+        return sorted({str(t)[:200] for t in items})[:50] if isinstance(items, list) else []
+
+    yellow, red = texts("yellow"), texts("red")
+    prev = _alert_state()
+    seq = int(prev.get("yellow_seq") or 0)
+    if any(t not in (prev.get("yellow") or []) for t in yellow):
+        seq += 1
+    redis_store.set(
+        ALERT_STATE_KEY, json.dumps({"ts": now_ms(), "yellow": yellow, "red": bool(red), "yellow_seq": seq})
+    )
+    return jsonify({"ok": True})
 
 
 @app.get("/api/charger")

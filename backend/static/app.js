@@ -41,22 +41,81 @@ const PI_COLORS = { "Koffer-Pi": "#0d6efd", "Bad-Pi": "#fd7e14", "Pi": "#0d6efd"
 let vitalsData = null;
 const TASTER_COLORS = ["#0d6efd", "#dc3545", "#198754", "#fd7e14", "#6f42c1", "#0dcaf0", "#d63384", "#795548", "#6c757d", "#20c997"];
 
+let vitalsEnd = null;      // Ende des Zeitfensters in ms; null = jetzt (live)
+let vitalsArchive = null;  // geladener Wettkampf, solange das Archiv als Datenquelle dient
+const VITALS_MAX_H = 6;
+
+function vitalsWindowMs() { return Number(byId("vitalsHours").value) * 3600 * 1000; }
+
+// Verschiebegrenzen des Zeitfensterendes: [fruehestes Ende, spaetestes Ende]
+function vitalsEndBounds() {
+  const win = vitalsWindowMs();
+  if (vitalsArchive) {
+    const first = vitalsArchive.first_ts;
+    return [Math.min(vitalsArchive.ended_ts, first + win), vitalsArchive.ended_ts];
+  }
+  const now = Date.now();
+  return [now - VITALS_MAX_H * 3600 * 1000 + win, now];
+}
+
+function panVitals(direction) {
+  const [lo, hi] = vitalsEndBounds();
+  const cur = vitalsEnd ?? hi;
+  let next = cur + direction * vitalsWindowMs() / 2;
+  next = Math.max(lo, Math.min(hi, next));
+  vitalsEnd = (!vitalsArchive && next >= hi - 1000) ? null : next;
+  if (vitalsArchive && next >= hi) vitalsEnd = null;
+  refreshVitals().catch(() => {});
+}
+
+function vitalsRangeText(t1, win) {
+  const f = t => new Date(t).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return `${f(t1 - win)} – ${f(t1)}`;
+}
+
+function buildArchiveVitals(a) {
+  const list = (a.tasters || []).slice().sort((x, y) => String(x.letter || "~").localeCompare(String(y.letter || "~")));
+  const series = list.map((t, i) => ({
+    label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: (a.vitals || {})[t.mac] || [],
+  }));
+  const piSeries = Object.entries(a.pi || {}).map(([n, pts]) => ({ label: n, color: PI_COLORS[n] || "#0d6efd", points: pts }));
+  const stamps = series.concat(piSeries).flatMap(s => s.points.map(p => p[0]));
+  const first = stamps.length ? Math.min(...stamps) : (a.since_ts || a.ended_ts);
+  vitalsArchive = { id: a.id, name: a.name, ended_ts: a.ended_ts, first_ts: first, series, piSeries, starts: a.starts || [] };
+  vitalsEnd = null;
+}
+
 async function refreshVitals() {
+  const hours = Number(byId("vitalsHours").value);
+  const win = hours * 3600 * 1000;
+  byId("vitalsLive").classList.toggle("d-none", !vitalsArchive);
+  byId("vitalsArchiveBadge").textContent = vitalsArchive ? `Archiv: ${vitalsArchive.name}` : "";
+  if (vitalsArchive) {
+    const t1 = vitalsEnd ?? vitalsArchive.ended_ts;
+    vitalsData = { hours, t1, series: vitalsArchive.series, starts: vitalsArchive.starts, tasters: [], piNodes: [], piSeries: vitalsArchive.piSeries, archive: true };
+    byId("vitalsRange").textContent = vitalsRangeText(t1, win);
+    drawVitals();
+    return;
+  }
   const list = ((await apiGet("/api/taster")).tasters || [])
     .slice().sort((a, b) => String(a.letter || "~").localeCompare(String(b.letter || "~")));
-  const hours = byId("vitalsHours").value;
+  const now = Date.now();
+  const t1 = vitalsEnd ?? now;
+  // Der Server liefert ab "jetzt minus Stunden"; bei verschobenem Fenster entsprechend weiter zurueck
+  const fetchH = Math.min(VITALS_MAX_H, (now - (t1 - win)) / 3600000);
   let starts = [];
   const series = await Promise.all(list.map(async (t, i) => {
-    const d = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(t.mac)}&hours=${hours}`).catch(() => ({ points: [] }));
+    const d = await apiGet(`/api/vitals/history?mac=${encodeURIComponent(t.mac)}&hours=${fetchH}`).catch(() => ({ points: [] }));
     if (d.starts && d.starts.length) starts = d.starts;
     return { label: `Taster ${t.letter || "?"}`, color: TASTER_COLORS[i % TASTER_COLORS.length], points: d.points || [] };
   }));
-  const pi = await apiGet(`/api/vitals/pi?hours=${hours}`).catch(() => ({ nodes: [] }));
+  const pi = await apiGet(`/api/vitals/pi?hours=${fetchH}`).catch(() => ({ nodes: [] }));
   if (!starts.length && pi.starts) starts = pi.starts;
   const piNodes = pi.nodes || [];
   await refreshCharger().catch(() => {});
   const piSeries = piNodes.map(n => ({ label: n.name, color: PI_COLORS[n.name] || "#0d6efd", points: n.points || [] }));
-  vitalsData = { hours: Number(hours), series, starts: starts || [], tasters: list, piNodes, piSeries };
+  vitalsData = { hours, t1: vitalsEnd, series, starts: starts || [], tasters: list, piNodes, piSeries };
+  byId("vitalsRange").textContent = vitalsEnd ? vitalsRangeText(t1, win) : "";
   drawVitals();
 }
 
@@ -278,55 +337,73 @@ async function refreshCharger() {
 async function refreshAllAlerts() {
   await refreshCharger().catch(() => {});
   await refreshSensorAlerts().catch(() => {});
-  updateAlertSound();
+  reportAlerts().catch(() => {});
 }
 
-// Ton bei Dashboard-Meldungen: gelb = kurzer Piep bei neuer Meldung, rot = langer Ton im Intervall, solange eine ansteht
-let alertSound = { yellow: true, red: true, lenS: 2, everyS: 10 };
-let alertAudio = null;
-let knownYellow = null;
-let lastRedBeepMs = 0;
-
-function alertBeep(freq, durationMs) {
-  if (!alertAudio || alertAudio.state !== "running") return;
-  const osc = alertAudio.createOscillator(), gain = alertAudio.createGain();
-  osc.frequency.value = freq;
-  osc.connect(gain);
-  gain.connect(alertAudio.destination);
-  const t = alertAudio.currentTime;
-  gain.gain.setValueAtTime(0.25, t);
-  gain.gain.setValueAtTime(0, t + durationMs / 1000);
-  osc.start(t);
-  osc.stop(t + durationMs / 1000 + 0.02);
-}
-
-function unlockAlertAudio() {
-  if (!alertAudio) {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    alertAudio = new Ctx();
-  }
-  if (alertAudio.state === "suspended") alertAudio.resume();
-}
-
+// Der Ton kommt aus dem Pieper des Ladekoffers: das Dashboard meldet seine gelben/roten Meldungen an den Pi
 function alertTexts(level) {
   return [...document.querySelectorAll(`#chargerAlerts .alert-${level}, #sensorAlerts .alert-${level}`)]
     .map(el => el.textContent.trim());
 }
 
-function updateAlertSound() {
-  const yellow = alertTexts("warning"), red = alertTexts("danger");
-  const fresh = knownYellow === null ? [] : yellow.filter(t => !knownYellow.includes(t));
-  knownYellow = yellow;
-  if (alertSound.yellow && fresh.length) alertBeep(1200, 300);
-  if (alertSound.red && red.length) {
-    if (Date.now() - lastRedBeepMs >= alertSound.everyS * 1000) {
-      lastRedBeepMs = Date.now();
-      alertBeep(800, alertSound.lenS * 1000);
-    }
-  } else {
-    lastRedBeepMs = 0;
-  }
+async function reportAlerts() {
+  await apiPost("/api/alert-state", { yellow: alertTexts("warning"), red: alertTexts("danger") });
+}
+
+// -----------------------------
+// Archiv
+// -----------------------------
+async function refreshArchive() {
+  const items = (await apiGet("/api/archive")).items || [];
+  const box = byId("archiveList");
+  if (!items.length) { box.textContent = "Noch kein Wettkampf archiviert."; return; }
+  const fmt = ts => ts ? new Date(ts).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–";
+  box.className = "mb-3";
+  box.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle"><thead><tr>
+    <th>Name</th><th>Beendet</th><th>Version</th><th></th></tr></thead><tbody>` +
+    items.map(it => `<tr><td>${escapeHtml(it.name || "")}</td><td>${fmt(it.ended_ts)}</td><td>${escapeHtml(it.app_version || "")}</td>
+      <td class="text-end"><button class="btn btn-sm btn-outline-primary" data-arch-open="${escapeHtml(it.id)}">Öffnen</button>
+      <button class="btn btn-sm btn-outline-danger" data-arch-del="${escapeHtml(it.id)}">Löschen</button></td></tr>`).join("") +
+    "</tbody></table></div>";
+  box.querySelectorAll("[data-arch-open]").forEach(b => b.addEventListener("click", () => openArchive(b.dataset.archOpen).catch(e => alert("Öffnen fehlgeschlagen: " + e.message))));
+  box.querySelectorAll("[data-arch-del]").forEach(b => b.addEventListener("click", async () => {
+    if (!window.confirm("Archivierten Wettkampf endgültig löschen?")) return;
+    try {
+      await fetch(`/api/archive/${encodeURIComponent(b.dataset.archDel)}`, { method: "DELETE" });
+      byId("archiveDetail").innerHTML = "";
+      await refreshArchive();
+    } catch (e) { alert("Löschen fehlgeschlagen: " + e.message); }
+  }));
+}
+
+async function openArchive(id) {
+  const a = await apiGet(`/api/archive/${encodeURIComponent(id)}`);
+  const enc = encodeURIComponent(id);
+  const names = run => {
+    const m = {};
+    ((a.startcards_per_run || {})[run] || []).forEach(r => { m[String(r["Bahn"])] = r["Name"] || ""; });
+    return m;
+  };
+  const tables = (a.heats || []).map(([run, attempt, times]) => {
+    const nm = names(run);
+    const lanes = Object.keys(times).sort((x, y) => Number(x) - Number(y));
+    const rows = lanes.map(l => `<tr><td>${escapeHtml(l)}</td><td>${escapeHtml(nm[l] || "")}</td><td>${formatMs(times[l])}</td></tr>`).join("");
+    return `<div class="mb-3"><strong class="small">Lauf ${escapeHtml(String(run))}, Version ${escapeHtml(String(attempt))}</strong>
+      <table class="table table-sm mb-0"><thead><tr><th>Bahn</th><th>Name</th><th>Zeit</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join("") || '<div class="text-muted small">Keine Läufe gespeichert.</div>';
+  const box = byId("archiveDetail");
+  box.innerHTML = `<div class="card"><div class="card-body">
+    <h3 class="h6">${escapeHtml(a.name || "")}</h3>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button class="btn btn-sm btn-primary" id="archVitals">Vitaldaten anzeigen</button>
+      <a class="btn btn-sm btn-outline-secondary" href="/api/archive/${enc}/heats.xml">XML</a>
+      <a class="btn btn-sm btn-outline-secondary" href="/api/archive/${enc}/raw.json">Rohdaten</a>
+    </div>${tables}</div></div>`;
+  byId("archVitals").addEventListener("click", () => {
+    buildArchiveVitals(a);
+    bootstrap.Tab.getOrCreateInstance(byId("vitals-tab")).show();
+    refreshVitals().catch(() => {});
+  });
 }
 
 function chargerStatusHtml() {
@@ -366,7 +443,9 @@ function drawVitals() {
       `<div class="col-12"><div class="card h-100"><div class="card-body p-2">
       <strong class="small">Zustand der Taster und Pis</strong><div id="vitalsStatus" class="mt-1"></div></div></div></div>`;
   }
-  byId("vitalsStatus").innerHTML = vitalsStatusHtml() + piStatusHtml() + chargerStatusHtml();
+  byId("vitalsStatus").innerHTML = vitalsData.archive
+    ? '<span class="text-muted small">Archivierter Wettkampf – der aktuelle Zustand wird nicht angezeigt.</span>'
+    : vitalsStatusHtml() + piStatusHtml() + chargerStatusHtml();
   VITAL_CHARTS.forEach(c => drawVitalChart(c, s));
   PI_CHARTS.forEach(c => drawVitalChart(c, vitalsData.piSeries));
 }
@@ -381,11 +460,14 @@ function drawVitalChart(c, series) {
   g.scale(dpr, dpr);
   g.clearRect(0, 0, w, h);
   const cols = c.idx2 ? [[c.idx, false], [c.idx2, true]] : [[c.idx, false]];
-  const lines = cols.flatMap(([ci, dash]) => series.map(s => ({ dash, color: s.color, data: s.points.filter(p => p[ci] !== null).map(p => [p[0], p[ci]]) })));
+  const t1 = vitalsData.t1 ?? Date.now(), t0 = t1 - vitalsData.hours * 3600 * 1000;
+  const lines = cols.flatMap(([ci, dash]) => series.map(s => ({
+    dash, color: s.color,
+    data: s.points.filter(p => p[ci] !== null && p[0] >= t0 && p[0] <= t1).map(p => [p[0], p[ci]]),
+  })));
   const all = lines.flatMap(l => l.data.map(d => d[1]));
   if (!all.length) { g.fillStyle = "#888"; g.font = "12px sans-serif"; g.fillText("keine Daten", 10, 20); return; }
   const dec = c.decimals ?? 0;
-  const t1 = Date.now(), t0 = t1 - vitalsData.hours * 3600 * 1000;
   let lo = c.min ?? Math.min(...all);
   let hi = c.max ?? Math.max(...all);
   if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
@@ -706,12 +788,6 @@ async function loadSettingsIntoUI() {
   byId("chargerWakePinsInput").value = s.charger_wake_pins ?? "8,9,10,11,12,13,14,15,0,1";
   byId("chargerWakeMsInput").value = s.charger_wake_ms ?? "3000";
   byId("chargerWakeGapInput").value = s.charger_wake_gap_ms ?? "1000";
-  alertSound = {
-    yellow: (s.alert_beep_yellow ?? "1") === "1",
-    red: (s.alert_beep_red ?? "1") === "1",
-    lenS: Number(s.alert_red_len_s ?? 2) || 2,
-    everyS: Number(s.alert_red_every_s ?? 10) || 10,
-  };
   const rangeOn = s.range_test_on === "1";
   if (document.activeElement !== byId("rangeTestLetter")) byId("rangeTestLetter").value = s.range_test_letter || "";
   byId("btnRangeTest").textContent = rangeOn ? "Funktest beenden" : "Funktest starten";
@@ -1529,10 +1605,18 @@ async function init() {
     );
     if (!confirmed) return;
 
+    const defaultName = "Wettkampf " + new Date().toLocaleDateString("de-DE");
+    const nameInput = window.prompt(
+      "Unter welchem Namen soll der Wettkampf im Archiv gespeichert werden?\n" +
+      "(Leer lassen = ohne Archivierung beenden, Abbrechen = nicht beenden)",
+      defaultName
+    );
+    if (nameInput === null) return;
+
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      const result = await apiPost("/api/competition/end");
+      const result = await apiPost("/api/competition/end", { name: nameInput.trim() });
       startcards = { rows: [], max_lane: 0, runs: [], source_url: null, last_fetch_ts: null, error: null };
       currentRun = null;
       maxLane = 10;
@@ -1540,7 +1624,7 @@ async function init() {
       updateRunSelect([]);
       updateStartcardsStatusLine();
       await Promise.all([loadButtons(), loadRunStatus()]);
-      alert(`Wettkampf beendet. Der Abschaltbefehl ist ${result.shutdown_grace_s} Sekunden aktiv.`);
+      alert(`Wettkampf beendet${result.archive_id ? " und im Archiv gespeichert" : ""}. Der Abschaltbefehl ist ${result.shutdown_grace_s} Sekunden aktiv.`);
     } catch (e) {
       alert("Wettkampf konnte nicht beendet werden: " + e.message);
     } finally {
@@ -1573,7 +1657,18 @@ async function init() {
   byId("btnAccountSave").addEventListener("click", saveAccount);
   byId("btnLogout").addEventListener("click", logout);
   byId("vitals-tab").addEventListener("shown.bs.tab", () => refreshVitals().catch(() => {}));
-  byId("vitalsHours").addEventListener("change", () => refreshVitals().catch(() => {}));
+  byId("vitalsHours").addEventListener("change", () => {
+    if (vitalsEnd !== null) {
+      const [lo, hi] = vitalsEndBounds();
+      vitalsEnd = Math.max(lo, Math.min(hi, vitalsEnd));
+    }
+    refreshVitals().catch(() => {});
+  });
+  byId("vitalsEarlier").addEventListener("click", () => panVitals(-1));
+  byId("vitalsLater").addEventListener("click", () => panVitals(1));
+  byId("vitalsNow").addEventListener("click", () => { vitalsEnd = null; refreshVitals().catch(() => {}); });
+  byId("vitalsLive").addEventListener("click", () => { vitalsArchive = null; vitalsEnd = null; refreshVitals().catch(() => {}); });
+  byId("archive-tab").addEventListener("shown.bs.tab", () => refreshArchive().catch(e => { byId("archiveList").textContent = "Fehler: " + e.message; }));
   window.addEventListener("resize", () => { if (vitalsData) drawVitals(); });
   setInterval(() => {
     if (byId("vitals").classList.contains("active")) refreshVitals().catch(() => {});
@@ -1616,9 +1711,6 @@ async function init() {
   }
   setInterval(() => { loadRunStatus().catch(() => {}); }, 250);
   setInterval(updateClocks, 50);
-  // Alarmton: Browser erlaubt Audio erst nach einer Nutzeraktion
-  ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, unlockAlertAudio, { passive: true }));
-  setInterval(updateAlertSound, 1000);
   // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
   setInterval(() => {
     if (document.querySelector(".taster-card.dragging")) return;

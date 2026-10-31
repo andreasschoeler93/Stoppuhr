@@ -60,6 +60,11 @@
       </button>
     </li>
     <li class="nav-item" role="presentation">
+      <button class="nav-link" id="archive-tab" data-bs-toggle="tab" data-bs-target="#archive" type="button" role="tab">
+        Archiv
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
       <button class="nav-link" id="status-tab" data-bs-toggle="tab" data-bs-target="#status" type="button" role="tab">
         Systemstatus
       </button>
@@ -271,7 +276,7 @@
               <input type="number" min="0" max="1440" step="1" id="lowBatteryMinInput" class="form-control" value="5">
               <div class="form-text">Zeit unterhalb der Warnschwelle, nach der sich der Taster abschaltet. 0 = nie.</div>
             </div>
-            <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0">Ton im Dashboard</h3></div>
+            <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0">Ton bei Dashboard-Meldungen (Pieper im Ladekoffer)</h3></div>
             <div class="col-12">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="alertBeepYellow">
@@ -281,7 +286,7 @@
                 <input class="form-check-input" type="checkbox" id="alertBeepRed">
                 <label class="form-check-label" for="alertBeepRed">Langer Piepton, solange eine rote Meldung ansteht</label>
               </div>
-              <div class="form-text">Der Ton kommt aus dem Browser, in dem das Dashboard offen ist. Der Browser erlaubt ihn erst nach dem ersten Klick oder Tastendruck auf der Seite; ein Handy im Stumm-Modus bleibt still.</div>
+              <div class="form-text">Der Ton kommt aus dem Pieper des Ladekoffers, also unabhängig von der Lautstärke des Laptops. Die Meldungen kommen vom geöffneten Dashboard (Koffer ab Firmware v0.2.0); ist das Dashboard länger als 30 s nicht offen, bleibt der Ton aus.</div>
             </div>
             <div class="col-md-6">
               <label class="form-label">Roter Ton: Länge (Sekunden)</label>
@@ -457,9 +462,24 @@
           <option value="3">letzte 3 Stunden</option>
           <option value="6" selected>letzte 6 Stunden</option>
         </select>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Zeitfenster verschieben">
+          <button class="btn btn-outline-secondary" type="button" id="vitalsEarlier" title="Zeitfenster nach hinten schieben">◀ früher</button>
+          <button class="btn btn-outline-secondary" type="button" id="vitalsLater" title="Zeitfenster nach vorn schieben">später ▶</button>
+          <button class="btn btn-outline-secondary" type="button" id="vitalsNow">Jetzt</button>
+        </div>
+        <span class="small fw-semibold" id="vitalsArchiveBadge"></span>
+        <button class="btn btn-sm btn-outline-primary d-none" type="button" id="vitalsLive">Zurück zu Live</button>
+        <span class="text-muted small" id="vitalsRange"></span>
         <span class="text-muted small" id="vitalsInfo"></span>
       </div>
       <div class="row g-3" id="vitalsCharts"></div>
+    </div>
+
+    <!-- TAB: Archiv -->
+    <div class="tab-pane fade" id="archive" role="tabpanel">
+      <h2 class="h6">Archivierte Wettkämpfe</h2>
+      <div id="archiveList" class="mb-3 text-muted small">Lade …</div>
+      <div id="archiveDetail"></div>
     </div>
 
     <!-- TAB: Systemstatus -->
