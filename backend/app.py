@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.19.0
+# Version: v0.20.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -23,7 +23,7 @@ from typing import Any, Final, Optional, TypedDict
 
 import psutil
 import redis
-from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, session
+from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, send_file, session
 from flask.sessions import SecureCookieSessionInterface
 from flask.typing import ResponseReturnValue
 import archive
@@ -40,7 +40,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.19.0"
+APP_VERSION: Final[str] = "0.20.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -370,6 +370,32 @@ def _require_login() -> Optional[ResponseReturnValue]:
     if path.startswith("/api/"):
         return jsonify({"ok": False, "error": "auth", "setup": cred is None}), 401
     return redirect("/login")
+
+
+# Der Zustand wird als Ganzes geladen, geaendert und gespeichert. Ohne Sperre ueberschreiben sich
+# gleichzeitige Anfragen (z. B. zwei Taster, die zugleich druecken) gegenseitig und ein Druck geht verloren.
+# Deshalb laufen alle API-Anfragen nacheinander; nur langsame Routen ohne Zustandsaenderung sind ausgenommen.
+_STATE_LOCK: Final = threading.RLock()
+_STATE_LOCK_TIMEOUT_S: Final[int] = 10
+_UNLOCKED_PREFIXES: Final[tuple[str, ...]] = (
+    "/api/startcards/reload", "/api/pi-update", "/api/cluster", "/api/system-status", "/api/wifi-config",
+    "/api/firmware/releases", "/api/firmware/deploy", "/api/firmware/download",
+    "/api/charger/firmware", "/api/charger-firmware", "/api/vitals/pi", "/api/vitals/history",
+    "/api/archive",
+)
+
+
+@app.before_request
+def _state_lock_enter() -> None:
+    path = request.path
+    if path.startswith("/api/") and not path.startswith(_UNLOCKED_PREFIXES):
+        g.state_locked = _STATE_LOCK.acquire(timeout=_STATE_LOCK_TIMEOUT_S)
+
+
+@app.teardown_request
+def _state_lock_exit(_exc: Optional[BaseException]) -> None:
+    if g.pop("state_locked", False):
+        _STATE_LOCK.release()
 
 
 class _RedisKeySessions(SecureCookieSessionInterface):
@@ -1014,10 +1040,34 @@ def api_charger_firmware_download():
 @app.get("/api/charger-firmware")
 def api_charger_firmware_info():
     status = ladekoffer.load(redis_store)
+    error = None
+    releases: list[dict[str, Any]] = []
+    try:
+        releases = [{k: v for k, v in r.items() if k != "url"} for r in charger_firmware.list_releases()]
+    except Exception as exc:  # Netzwerk, JSON, Rate-Limit
+        error = f"GitHub nicht erreichbar: {exc}"
     return jsonify({
         "uploaded": charger_firmware.meta(redis_store),
         "running": status.get("fw") if status else None,
+        "releases": releases,
+        "error": error,
     })
+
+
+@app.post("/api/charger-firmware/deploy")
+def api_charger_firmware_deploy():
+    """Gewaehlte Version von GitHub laden und dem Koffer anbieten."""
+    tag = str((request.get_json(silent=True) or {}).get("tag", ""))
+    if firmware_store.parse_tag(tag) is None:
+        return jsonify({"ok": False, "error": "Ungueltige Version"}), 400
+    try:
+        meta = charger_firmware.download_release(redis_store, tag)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Download fehlgeschlagen: {exc}"}), 502
+    logger.info("Koffer-Firmware %s von GitHub geladen", tag)
+    return jsonify({"ok": True, "uploaded": meta})
 
 
 @app.post("/api/charger-firmware")

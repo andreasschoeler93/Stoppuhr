@@ -412,12 +412,26 @@
         <div class="card-body">
           <h2 class="h6 mb-2">Ladekoffer-Firmware</h2>
           <div class="small mb-2">Läuft: <strong id="chargerFwRunning">–</strong> · Bereitgestellt: <strong id="chargerFwUploaded">–</strong></div>
-          <div class="d-flex flex-wrap gap-2 align-items-center">
-            <input type="file" class="form-control form-control-sm w-auto" id="chargerFwFile" accept=".bin">
-            <button class="btn btn-primary btn-sm" id="btnChargerFwUpload">Hochladen und bereitstellen</button>
-            <button class="btn btn-outline-secondary btn-sm" id="btnChargerFwClear">Bereitstellung beenden</button>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label" for="chargerFwSelect">Version</label>
+              <select id="chargerFwSelect" class="form-select"></select>
+            </div>
+            <div class="col-md-6 d-flex gap-2">
+              <button class="btn btn-primary btn-sm" id="btnChargerFwDeploy">Auf Koffer laden</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnChargerFwClear">Abbrechen</button>
+              <button class="btn btn-outline-secondary btn-sm" id="btnChargerFwReload">Neu laden</button>
+            </div>
           </div>
-          <div class="form-text">Datei <code>.pio/build/seeed_xiao_esp32c3/firmware.bin</code> aus dem Ladekoffer-Projekt wählen. Der Koffer lädt sie beim nächsten Melden (alle paar Sekunden), startet neu und läuft dann mit der neuen Version. Nur ab Koffer-Firmware v0.4.0; die erste Version mit Update muss einmal per USB geflasht werden.</div>
+          <div class="form-text">Der Pi lädt die gewählte Version von GitHub. Der Koffer holt sie beim nächsten Melden (alle paar Sekunden), prüft sie und startet neu. Nie während eines laufenden Laufs. Die Version muss einmal per USB mit <code>secrets.h</code> geflasht worden sein (ab v0.5.0); danach merkt sich der Koffer das WLAN.</div>
+          <div class="text-danger small d-none" id="chargerFwError"></div>
+          <details class="mt-2">
+            <summary class="small">Eigene Datei hochladen (z. B. frisch gebaute <code>firmware.bin</code>)</summary>
+            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+              <input type="file" class="form-control form-control-sm w-auto" id="chargerFwFile" accept=".bin">
+              <button class="btn btn-outline-primary btn-sm" id="btnChargerFwUpload">Hochladen und bereitstellen</button>
+            </div>
+          </details>
           <div class="small d-none" id="chargerFwMsg"></div>
         </div>
       </div>

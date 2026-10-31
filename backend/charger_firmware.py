@@ -9,6 +9,8 @@ import re
 import time
 from typing import Any, Final, Optional
 
+import firmware_store
+
 DIR: Final[str] = os.environ.get(
     "FIRMWARE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware_cache")
 )
@@ -18,6 +20,50 @@ META_KEY: Final[str] = "CHARGER_FW"
 MARKER_RE: Final[re.Pattern[bytes]] = re.compile(rb"KOFFER-FW:(v\d+\.\d+\.\d+)")
 MAX_SIZE: Final[int] = 1_310_720  # eine OTA-Partition
 MIN_SIZE: Final[int] = 100_000
+
+
+REPO: Final[str] = os.environ.get("CHARGER_FIRMWARE_REPO", "andreasschoeler93/Stoppuhr-2.0-Ladekoffer")
+ASSET_NAME: Final[str] = "firmware.bin"
+# Erste Version, die ihre Zugangsdaten im Flash speichert und deshalb als fertige Release-Datei laeuft
+MIN_VERSION: Final[tuple[int, int, int]] = (0, 5, 0)
+_cache: dict[str, Any] = {"ts": 0.0, "data": None}
+
+
+def list_releases(ttl_s: int = 120) -> list[dict[str, Any]]:
+    """Releases mit firmware.bin ab MIN_VERSION, neueste zuerst (GitHub, kurz zwischengespeichert)."""
+    if _cache["data"] is not None and time.time() - _cache["ts"] < ttl_s:
+        return _cache["data"]
+    with firmware_store._get(f"https://api.github.com/repos/{REPO}/releases?per_page=100") as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    out = []
+    for rel in data:
+        tag = str(rel.get("tag_name", ""))
+        ver = firmware_store.parse_tag(tag)
+        if ver is None or ver < MIN_VERSION or rel.get("draft") or rel.get("prerelease"):
+            continue
+        asset = next((a for a in rel.get("assets", []) if a.get("name") == ASSET_NAME), None)
+        if asset is None:
+            continue
+        out.append({"tag": tag, "published": rel.get("published_at"), "size": asset.get("size"), "url": asset.get("browser_download_url")})
+    out.sort(key=lambda r: firmware_store.parse_tag(r["tag"]) or (0, 0, 0), reverse=True)
+    _cache["ts"], _cache["data"] = time.time(), out
+    return out
+
+
+def download_release(redis_store: Any, tag: str) -> dict[str, Any]:
+    """Laedt das Release von GitHub und stellt es dem Koffer bereit."""
+    release = next((r for r in list_releases() if r["tag"] == tag), None)
+    if release is None:
+        raise ValueError("Version nicht gefunden")
+    if not str(release["url"]).startswith(firmware_store.ALLOWED_HOSTS):
+        raise ValueError("Download-Adresse nicht erlaubt")
+    with firmware_store._get(release["url"]) as resp:
+        data = resp.read(MAX_SIZE + 1)
+    meta_ = save(redis_store, data)
+    if meta_["version"] != tag:
+        clear(redis_store)
+        raise ValueError("Die Datei enthaelt eine andere Version als das Release")
+    return meta_
 
 
 def validate(data: bytes) -> str:

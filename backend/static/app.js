@@ -357,6 +357,29 @@ async function refreshChargerFw() {
   const d = await apiGet("/api/charger-firmware");
   byId("chargerFwRunning").textContent = d.running || "–";
   byId("chargerFwUploaded").textContent = d.uploaded ? d.uploaded.version : "nichts";
+  const sel = byId("chargerFwSelect"), keep = sel.value;
+  const tags = (d.releases || []).map(r => r.tag);
+  if (d.uploaded && !tags.includes(d.uploaded.version)) tags.unshift(d.uploaded.version);
+  sel.innerHTML = tags.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}${t === d.running ? " (läuft)" : ""}</option>`).join("")
+    || '<option value="">keine Version verfügbar</option>';
+  if (tags.includes(keep)) sel.value = keep;
+  const err = byId("chargerFwError");
+  err.textContent = d.error || "";
+  err.classList.toggle("d-none", !d.error);
+}
+
+async function deployChargerFw() {
+  const tag = byId("chargerFwSelect").value, msg = byId("chargerFwMsg");
+  if (!tag) return;
+  msg.className = "small text-muted"; msg.textContent = `Lade ${tag} von GitHub …`;
+  try {
+    await apiPost("/api/charger-firmware/deploy", { tag });
+    msg.className = "small text-success";
+    msg.textContent = `Version ${tag} bereitgestellt. Der Koffer holt sie beim nächsten Melden.`;
+    await refreshChargerFw();
+  } catch (e) {
+    msg.className = "small text-danger"; msg.textContent = "Fehlgeschlagen: " + e.message;
+  }
 }
 
 async function uploadChargerFw() {
@@ -1683,6 +1706,8 @@ async function init() {
   });
   byId("btnWifiSave").addEventListener("click", saveWifi);
   byId("btnChargerFwUpload").addEventListener("click", uploadChargerFw);
+  byId("btnChargerFwDeploy").addEventListener("click", deployChargerFw);
+  byId("btnChargerFwReload").addEventListener("click", () => refreshChargerFw().catch(e => alert("Versionen laden fehlgeschlagen: " + e.message)));
   byId("btnChargerFwClear").addEventListener("click", async () => {
     await fetch("/api/charger-firmware", { method: "DELETE" }).catch(() => {});
     refreshChargerFw().catch(() => {});
