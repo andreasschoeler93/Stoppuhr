@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.21.1
+# Version: v0.22.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -40,7 +40,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.21.1"
+APP_VERSION: Final[str] = "0.22.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -75,6 +75,7 @@ class Vital(TypedDict):
     uptime_s: Optional[int]
     ssid: Optional[str]
     wv: Optional[int]
+    online_since: Optional[int]
 
 
 TASTER_LETTERS = "ABCDEFGHIJ"
@@ -792,6 +793,7 @@ def _taster_with_vitals(taster: Taster, vitals: dict[str, Vital]) -> dict[str, A
         "fw": v.get("fw"),
         "ssid": v.get("ssid"),
         "last_seen_ts": last_seen,
+        "online_since": v.get("online_since"),
         "online": bool(last_seen) and now_ms() - int(last_seen) <= TASTER_ONLINE_TIMEOUT_MS,
     }
 
@@ -1010,6 +1012,11 @@ def api_post_vitals():
         "ssid": payload.get("ssid"),
         "wv": payload.get("wv") if isinstance(payload.get("wv"), int) else None,
     }
+    # Beginn der aktuellen Online-Phase: bleibt, solange die Meldungen nicht laenger als der Timeout ausbleiben
+    prev = st["vitals"].get(mac) or {}
+    prev_ts = prev.get("ts")
+    continuing = prev_ts and new_vital["ts"] - int(prev_ts) <= TASTER_ONLINE_TIMEOUT_MS
+    new_vital["online_since"] = (prev.get("online_since") or prev_ts) if continuing else new_vital["ts"]
     st["vitals"][mac] = new_vital
     # Uhrversatz Taster -> Server lernen (Server-Zeit minus Taster-Zeit); Sprung nach unten
     # sofort uebernehmen (geringste Latenz), nach oben nur langsam (Netzwerkjitter).

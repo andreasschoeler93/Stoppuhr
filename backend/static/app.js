@@ -297,11 +297,21 @@ function piStatusHtml() {
   return `<div class="table-responsive mt-2"><table class="table table-sm align-middle mb-0"><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+function onlineSinceHtml(t) {
+  if (!t.online || !t.online_since) return "–";
+  const s = Math.max(0, Math.floor((Date.now() - t.online_since) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  const dauer = h > 0 ? `${h} h ${m} min` : m > 0 ? `${m} min` : `${s} s`;
+  const uhr = new Date(t.online_since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${uhr}<br><span class="small text-muted">${dauer}</span>`;
+}
+
 function vitalsStatusHtml() {
   const list = vitalsData.tasters || [];
   const num = (v, dec, unit, rule) => (v === null || v === undefined) ? "–" : levelHtml(`${Number(v).toFixed(dec)} ${unit}`, limitLevel(v, rule));
   const rows = [
     ["Status", t => t.online ? '<span class="badge text-bg-success">online</span>' : '<span class="badge text-bg-secondary">offline</span>'],
+    ["Online seit", t => onlineSinceHtml(t)],
     ["Akku", t => num(t.battery, 0, "%", LIMITS.taster.battery)],
     ["Spannung", t => num(t.vbat, 2, "V", LIMITS.taster.vbat)],
     ["Temperatur", t => num(t.temp, 1, "°C", LIMITS.taster.temp)],
