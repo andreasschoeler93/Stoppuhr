@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.17.0 | 2026-10-31 | Ton im Dashboard: neue gelbe Meldung = kurzer Piepton, anstehende rote Meldung = langer Ton (Standard 2 s, alle 10 s); jeweils einzeln abschaltbar, Länge und Intervall einstellbar. Neue Einstellungen für das Aufwecken der Taster im Ladekoffer (Magnet-Pins je Slot, Impulslänge, Abstand); der Koffer (Firmware ab v0.2.0) holt sie aus der Antwort auf `POST /api/charger`. |
 | v0.16.1 | 2026-10-30 | Fehlerbehebung zu v0.16.0: Taster ohne Zuordnung bekamen keine Zuordnungsseite (Buchstabe und Akku) mehr, sondern zeigten „Bahn 0“. |
 | v0.16.0 | 2026-10-30 | Funktest (Reichweite): In den Einstellungen Tasterbuchstaben eingeben und „Funktest starten“. Der Taster (Firmware ab v0.15.0) wechselt ins Bad-WLAN, zeigt die Signalstärke in dBm (grün/gelb/rot nach den Grenzwerten „Taster: WLAN-Signal“) und piept bei kritischem Signal. Tastendrücke dieses Tasters werden währenddessen ignoriert. |
 | v0.15.0 | 2026-10-30 | Neue Einstellungen für die Taster-Akkuwarnung: „Akku-Warnung ab (%)“ (Standard 10, 0 = aus) und „automatisch ausschalten nach (Minuten)“ (Standard 5, 0 = nie). Die Werte gehen über `/api/display` an die Taster (Firmware ab v0.14.0). |

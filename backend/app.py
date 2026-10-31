@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.16.1
+# Version: v0.17.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -38,7 +38,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.16.1"
+APP_VERSION: Final[str] = "0.17.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -199,6 +199,30 @@ def _is_range_test_taster(st: State, mac: str) -> bool:
     if not letter or str(settings.get("range_test_on", "0")) != "1":
         return False
     return any(t.get("mac") == mac and str(t.get("letter") or "").upper() == letter for t in st.get("tasters", []))
+
+
+DEFAULT_WAKE_PINS: Final[str] = "8,9,10,11,12,13,14,15,0,1"
+
+
+def _parse_wake_pins(value: Any) -> Optional[list[int]]:
+    """MCP-Pins (0..15) der Magnet-Trigger fuer Slot 1..10; None bei ungueltiger Eingabe."""
+    try:
+        pins = [int(p) for p in str(value).replace(";", ",").replace(" ", ",").split(",") if p.strip()]
+    except ValueError:
+        return None
+    if len(pins) != 10 or any(not 0 <= p <= 15 for p in pins):
+        return None
+    return pins
+
+
+def _wake_config(st: State) -> dict[str, Any]:
+    """Wecksequenz des Ladekoffers; wird dem Koffer in der Antwort auf POST /api/charger mitgegeben."""
+    pins = _parse_wake_pins(st.get("settings", {}).get("charger_wake_pins", DEFAULT_WAKE_PINS))
+    return {
+        "pins": pins or _parse_wake_pins(DEFAULT_WAKE_PINS),
+        "ms": _int_setting(st, "charger_wake_ms", 3000),
+        "gap_ms": _int_setting(st, "charger_wake_gap_ms", 1000),
+    }
 
 
 def _int_setting(st: State, key: str, default: int) -> int:
@@ -495,6 +519,28 @@ def api_set_settings() -> ResponseReturnValue:
         settings["range_test_on"] = "1" if payload["range_test_on"] in (True, 1, "1", "true") else "0"
         if settings["range_test_on"] == "1" and not settings.get("range_test_letter"):
             return jsonify({"ok": False, "error": "Bitte zuerst einen Tasterbuchstaben eingeben."}), 400
+    for key in ("alert_beep_yellow", "alert_beep_red"):
+        if key in payload:
+            settings[key] = "1" if payload[key] in (True, 1, "1", "true") else "0"
+    for key, lower, upper in (
+        ("alert_red_len_s", 1, 30),
+        ("alert_red_every_s", 1, 3600),
+        ("charger_wake_ms", 500, 30_000),
+        ("charger_wake_gap_ms", 100, 30_000),
+    ):
+        if key in payload:
+            try:
+                value = int(payload[key])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{key} must be a number"}), 400
+            if not lower <= value <= upper:
+                return jsonify({"ok": False, "error": f"{key} must be between {lower} and {upper}"}), 400
+            settings[key] = str(value)
+    if "charger_wake_pins" in payload:
+        pins = _parse_wake_pins(payload["charger_wake_pins"])
+        if pins is None:
+            return jsonify({"ok": False, "error": "charger_wake_pins: 10 Zahlen von 0 bis 15, durch Komma getrennt"}), 400
+        settings["charger_wake_pins"] = ",".join(str(p) for p in pins)
     if "shutdown_grace_s" in payload:
         try:
             shutdown_grace_s = int(payload["shutdown_grace_s"])
@@ -854,7 +900,7 @@ def api_post_charger():
     # Der Server-Zeitstempel zaehlt, die Platine hat keine Uhr
     status["ts"] = now_ms()
     ladekoffer.save(redis_store, status)
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "wake": _wake_config(load_state())})
 
 
 @app.get("/api/charger")

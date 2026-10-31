@@ -271,6 +271,40 @@
               <input type="number" min="0" max="1440" step="1" id="lowBatteryMinInput" class="form-control" value="5">
               <div class="form-text">Zeit unterhalb der Warnschwelle, nach der sich der Taster abschaltet. 0 = nie.</div>
             </div>
+            <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0">Ton im Dashboard</h3></div>
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="alertBeepYellow">
+                <label class="form-check-label" for="alertBeepYellow">Kurzer Piepton, sobald eine neue gelbe Meldung erscheint</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="alertBeepRed">
+                <label class="form-check-label" for="alertBeepRed">Langer Piepton, solange eine rote Meldung ansteht</label>
+              </div>
+              <div class="form-text">Der Ton kommt aus dem Browser, in dem das Dashboard offen ist. Der Browser erlaubt ihn erst nach dem ersten Klick oder Tastendruck auf der Seite; ein Handy im Stumm-Modus bleibt still.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Roter Ton: Länge (Sekunden)</label>
+              <input type="number" min="1" max="30" step="1" id="alertRedLenInput" class="form-control" value="2">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Roter Ton: Wiederholung alle (Sekunden)</label>
+              <input type="number" min="1" max="3600" step="1" id="alertRedEveryInput" class="form-control" value="10">
+            </div>
+            <div class="col-12"><hr class="my-1"><h3 class="h6 mb-0">Ladekoffer: Taster aufwecken</h3></div>
+            <div class="col-12">
+              <label class="form-label">Magnet-Pins je Slot 1–10 (MCP23017 U5, 0–7 = GPA0–7, 8–15 = GPB0–7)</label>
+              <input type="text" id="chargerWakePinsInput" class="form-control" value="8,9,10,11,12,13,14,15,0,1">
+              <div class="form-text">Zehn Zahlen, durch Komma getrennt, in Slot-Reihenfolge. Beim Aufwecken (Quittiertaster lang drücken) wird jeder Pin der Reihe nach gegen GND gezogen. Der Koffer übernimmt die Werte beim nächsten Status (spätestens nach 5 s). Bitte mit dem Schaltplan abgleichen.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Weck-Impuls je Slot (ms)</label>
+              <input type="number" min="500" max="30000" step="100" id="chargerWakeMsInput" class="form-control" value="3000">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Abstand zwischen den Slots (ms)</label>
+              <input type="number" min="100" max="30000" step="100" id="chargerWakeGapInput" class="form-control" value="1000">
+            </div>
             <div class="col-12">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="starterIsFinishInput">

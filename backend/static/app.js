@@ -278,6 +278,55 @@ async function refreshCharger() {
 async function refreshAllAlerts() {
   await refreshCharger().catch(() => {});
   await refreshSensorAlerts().catch(() => {});
+  updateAlertSound();
+}
+
+// Ton bei Dashboard-Meldungen: gelb = kurzer Piep bei neuer Meldung, rot = langer Ton im Intervall, solange eine ansteht
+let alertSound = { yellow: true, red: true, lenS: 2, everyS: 10 };
+let alertAudio = null;
+let knownYellow = null;
+let lastRedBeepMs = 0;
+
+function alertBeep(freq, durationMs) {
+  if (!alertAudio || alertAudio.state !== "running") return;
+  const osc = alertAudio.createOscillator(), gain = alertAudio.createGain();
+  osc.frequency.value = freq;
+  osc.connect(gain);
+  gain.connect(alertAudio.destination);
+  const t = alertAudio.currentTime;
+  gain.gain.setValueAtTime(0.25, t);
+  gain.gain.setValueAtTime(0, t + durationMs / 1000);
+  osc.start(t);
+  osc.stop(t + durationMs / 1000 + 0.02);
+}
+
+function unlockAlertAudio() {
+  if (!alertAudio) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    alertAudio = new Ctx();
+  }
+  if (alertAudio.state === "suspended") alertAudio.resume();
+}
+
+function alertTexts(level) {
+  return [...document.querySelectorAll(`#chargerAlerts .alert-${level}, #sensorAlerts .alert-${level}`)]
+    .map(el => el.textContent.trim());
+}
+
+function updateAlertSound() {
+  const yellow = alertTexts("warning"), red = alertTexts("danger");
+  const fresh = knownYellow === null ? [] : yellow.filter(t => !knownYellow.includes(t));
+  knownYellow = yellow;
+  if (alertSound.yellow && fresh.length) alertBeep(1200, 300);
+  if (alertSound.red && red.length) {
+    if (Date.now() - lastRedBeepMs >= alertSound.everyS * 1000) {
+      lastRedBeepMs = Date.now();
+      alertBeep(800, alertSound.lenS * 1000);
+    }
+  } else {
+    lastRedBeepMs = 0;
+  }
 }
 
 function chargerStatusHtml() {
@@ -650,6 +699,19 @@ async function loadSettingsIntoUI() {
   byId("starterIsFinishQuick").checked = s.starter_is_finish === "1";
   byId("lowBatteryPctInput").value = s.low_battery_pct ?? "10";
   byId("lowBatteryMinInput").value = s.low_battery_min ?? "5";
+  byId("alertBeepYellow").checked = (s.alert_beep_yellow ?? "1") === "1";
+  byId("alertBeepRed").checked = (s.alert_beep_red ?? "1") === "1";
+  byId("alertRedLenInput").value = s.alert_red_len_s ?? "2";
+  byId("alertRedEveryInput").value = s.alert_red_every_s ?? "10";
+  byId("chargerWakePinsInput").value = s.charger_wake_pins ?? "8,9,10,11,12,13,14,15,0,1";
+  byId("chargerWakeMsInput").value = s.charger_wake_ms ?? "3000";
+  byId("chargerWakeGapInput").value = s.charger_wake_gap_ms ?? "1000";
+  alertSound = {
+    yellow: (s.alert_beep_yellow ?? "1") === "1",
+    red: (s.alert_beep_red ?? "1") === "1",
+    lenS: Number(s.alert_red_len_s ?? 2) || 2,
+    everyS: Number(s.alert_red_every_s ?? 10) || 10,
+  };
   const rangeOn = s.range_test_on === "1";
   if (document.activeElement !== byId("rangeTestLetter")) byId("rangeTestLetter").value = s.range_test_letter || "";
   byId("btnRangeTest").textContent = rangeOn ? "Funktest beenden" : "Funktest starten";
@@ -1440,7 +1502,14 @@ async function init() {
         shutdown_grace_s: byId("shutdownGraceInput").value,
         starter_is_finish: byId("starterIsFinishInput").checked,
         low_battery_pct: byId("lowBatteryPctInput").value,
-        low_battery_min: byId("lowBatteryMinInput").value
+        low_battery_min: byId("lowBatteryMinInput").value,
+        alert_beep_yellow: byId("alertBeepYellow").checked,
+        alert_beep_red: byId("alertBeepRed").checked,
+        alert_red_len_s: byId("alertRedLenInput").value,
+        alert_red_every_s: byId("alertRedEveryInput").value,
+        charger_wake_pins: byId("chargerWakePinsInput").value,
+        charger_wake_ms: byId("chargerWakeMsInput").value,
+        charger_wake_gap_ms: byId("chargerWakeGapInput").value
       });
       // mirror to main tab
       await loadSettingsIntoUI();
@@ -1547,6 +1616,9 @@ async function init() {
   }
   setInterval(() => { loadRunStatus().catch(() => {}); }, 250);
   setInterval(updateClocks, 50);
+  // Alarmton: Browser erlaubt Audio erst nach einer Nutzeraktion
+  ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, unlockAlertAudio, { passive: true }));
+  setInterval(updateAlertSound, 1000);
   // Taster-Liste regelmaessig aktualisieren (nicht waehrend Drag&Drop)
   setInterval(() => {
     if (document.querySelector(".taster-card.dragging")) return;
