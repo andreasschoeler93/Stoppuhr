@@ -43,7 +43,7 @@ const TASTER_COLORS = ["#0d6efd", "#dc3545", "#198754", "#fd7e14", "#6f42c1", "#
 
 let vitalsEnd = null;      // Ende des Zeitfensters in ms; null = jetzt (live)
 let vitalsArchive = null;  // geladener Wettkampf, solange das Archiv als Datenquelle dient
-const VITALS_MAX_H = 6;
+const VITALS_MAX_H = 48;
 
 function vitalsWindowMs() { return Number(byId("vitalsHours").value) * 3600 * 1000; }
 

@@ -1150,6 +1150,15 @@ def api_get_charger():
     return jsonify(ladekoffer.evaluate(ladekoffer.load(redis_store), now_ms()))
 
 
+VITALS_MAX_POINTS: Final[int] = 1500
+
+
+def _thin(points: list[Any]) -> list[Any]:
+    """Dünnt lange Verläufe aus (jeder n-te Punkt), damit die Anzeige bei 48 h schnell bleibt."""
+    step = -(-len(points) // VITALS_MAX_POINTS)
+    return points if step <= 1 else points[::step] + ([points[-1]] if (len(points) - 1) % step else [])
+
+
 @app.get("/api/vitals/known")
 def api_vitals_known():
     """Taster mit Verlauf (auch nach Wettkampfende, wenn sie nicht mehr angemeldet sind)."""
@@ -1164,7 +1173,7 @@ def api_vitals_history():
     hours = min(max(request.args.get("hours", default=KEEP_HOURS_DEFAULT, type=float), 0.1), vitals_history.KEEP_HOURS)
     since = now_ms() - int(hours * 3600 * 1000)
     return jsonify({"mac": mac, "fields": list(vitals_history.FIELDS),
-                    "points": vitals_history.history(redis_store, mac, since),
+                    "points": _thin(vitals_history.history(redis_store, mac, since)),
                     "starts": vitals_history.starts(redis_store, since)})
 
 
@@ -1182,7 +1191,7 @@ def api_vitals_pi():
             "cpu_temp": n.get("cpu_temp"), "cpu_percent": n.get("cpu_percent"),
             "mem_percent": n.get("mem_percent"), "disk_percent": n.get("disk_percent"),
             "uptime_s": n.get("uptime_s"),
-            "points": vitals_history.history_pi(redis_store, name, since),
+            "points": _thin(vitals_history.history_pi(redis_store, name, since)),
         })
     return jsonify({"fields": list(vitals_history.PI_FIELDS), "nodes": nodes,
                     "starts": vitals_history.starts(redis_store, since)})

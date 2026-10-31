@@ -6,7 +6,7 @@ from typing import Any, Final
 
 KEY_PREFIX: Final[str] = "VITALS_HIST:"
 STARTS_KEY: Final[str] = "RUN_STARTS"
-KEEP_HOURS: Final[int] = 6
+KEEP_HOURS: Final[int] = 48
 # Die Taster melden alle 10 s; etwas Reserve fuer schnellere Meldungen
 MAX_POINTS: Final[int] = KEEP_HOURS * 360 + 60
 FIELDS: Final[tuple[str, ...]] = ("battery", "vbat", "temp", "humidity", "rssi")
