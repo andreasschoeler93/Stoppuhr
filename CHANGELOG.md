@@ -5,6 +5,7 @@ Jede Version ist als Git-Tag `vX.Y.Z` markiert und kann in der Weboberfläche un
 
 | Version | Datum | Änderung |
 |---|---|---|
+| v0.19.0 | 2026-10-31 | Ladekoffer-Firmware per WLAN aktualisieren: Einstellungen → „Ladekoffer-Firmware“ (`firmware.bin` hochladen). Der Pi liest die Version aus der Datei und bietet sie dem Koffer in der Antwort auf `POST /api/charger` an (`ota`), Download über `GET /api/charger/firmware`. Koffer-Firmware ab v0.4.0. |
 | v0.18.0 | 2026-10-31 | Der Ton für gelbe/rote Dashboard-Meldungen kommt jetzt aus dem Pieper des Ladekoffers (Firmware ab v0.3.0, nicht mehr aus dem Browser; das Dashboard muss dafür offen sein). Wettkampf beenden fragt nach einem Namen und legt alles im neuen Tab **Archiv** ab (Ergebnisse, XML, Rohdaten, Vitaldaten; Vitaldaten höchstens die letzten 6 h). Vitaldaten: Zeitfenster lässt sich mit ◀ früher / später ▶ / Jetzt verschieben, auch für archivierte Wettkämpfe. |
 | v0.17.0 | 2026-10-31 | Ton im Dashboard: neue gelbe Meldung = kurzer Piepton, anstehende rote Meldung = langer Ton (Standard 2 s, alle 10 s); jeweils einzeln abschaltbar, Länge und Intervall einstellbar. Neue Einstellungen für das Aufwecken der Taster im Ladekoffer (Magnet-Pins je Slot, Impulslänge, Abstand); der Koffer (Firmware ab v0.2.0) holt sie aus der Antwort auf `POST /api/charger`. |
 | v0.16.1 | 2026-10-30 | Fehlerbehebung zu v0.16.0: Taster ohne Zuordnung bekamen keine Zuordnungsseite (Buchstabe und Akku) mehr, sondern zeigten „Bahn 0“. |

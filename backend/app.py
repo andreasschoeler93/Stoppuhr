@@ -1,6 +1,6 @@
 # ----------------------------------------
 # Stoppuhr Webserver
-# Version: v0.18.0
+# Version: v0.19.0
 # Status: stable-beta
 # ----------------------------------------
 
@@ -29,6 +29,7 @@ from flask.typing import ResponseReturnValue
 import archive
 import auth
 import firmware_store
+import charger_firmware
 import ladekoffer
 import limits as limits_module
 import node_info
@@ -39,7 +40,7 @@ import wifi_config
 from xml_writer import create_xml_heats
 
 
-APP_VERSION: Final[str] = "0.18.0"
+APP_VERSION: Final[str] = "0.19.0"
 DEFAULT_PORT: Final[int] = 1999  # Since JAuswertung expected this port
 EXIT_ERROR: Final[int] = 1
 STATE_KEY: Final[str] = "STATE"
@@ -331,6 +332,7 @@ _OPEN_ROUTES: Final[frozenset[tuple[str, str]]] = frozenset({
     ("POST", "/api/taster"),
     ("POST", "/api/vitals"),
     ("POST", "/api/charger"),
+    ("GET", "/api/charger/firmware"),
     ("POST", "/api/triggers"),
     ("GET", "/api/display"),
     ("POST", "/api/abort-run"),
@@ -994,7 +996,48 @@ def api_post_charger():
     status["ts"] = now_ms()
     ladekoffer.save(redis_store, status)
     st = load_state()
-    return jsonify({"ok": True, "wake": _wake_config(st), "beep": _beep_config(st)})
+    reply: dict[str, Any] = {"ok": True, "wake": _wake_config(st), "beep": _beep_config(st)}
+    ota = charger_firmware.offer(redis_store, str(status.get("fw") or ""))
+    if ota:
+        reply["ota"] = ota
+    return jsonify(reply)
+
+
+@app.get("/api/charger/firmware")
+def api_charger_firmware_download():
+    """Firmware-Datei fuer den Ladekoffer (ohne Anmeldung, nur wenn ein Update bereitliegt)."""
+    if charger_firmware.meta(redis_store) is None:
+        abort(404)
+    return send_file(charger_firmware.FILE, mimetype="application/octet-stream", conditional=False)
+
+
+@app.get("/api/charger-firmware")
+def api_charger_firmware_info():
+    status = ladekoffer.load(redis_store)
+    return jsonify({
+        "uploaded": charger_firmware.meta(redis_store),
+        "running": status.get("fw") if status else None,
+    })
+
+
+@app.post("/api/charger-firmware")
+def api_charger_firmware_upload():
+    file = request.files.get("file")
+    if file is None:
+        return jsonify({"ok": False, "error": "Keine Datei gewaehlt."}), 400
+    data = file.read(charger_firmware.MAX_SIZE + 1)
+    try:
+        meta = charger_firmware.save(redis_store, data)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    logger.info("Koffer-Firmware %s hochgeladen", meta["version"])
+    return jsonify({"ok": True, "uploaded": meta})
+
+
+@app.delete("/api/charger-firmware")
+def api_charger_firmware_delete():
+    charger_firmware.clear(redis_store)
+    return jsonify({"ok": True})
 
 
 ALERT_STATE_KEY: Final[str] = "ALERT_STATE"

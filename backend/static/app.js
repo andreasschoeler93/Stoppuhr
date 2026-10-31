@@ -351,6 +351,34 @@ async function reportAlerts() {
 }
 
 // -----------------------------
+// Ladekoffer-Firmware (Update per WLAN)
+// -----------------------------
+async function refreshChargerFw() {
+  const d = await apiGet("/api/charger-firmware");
+  byId("chargerFwRunning").textContent = d.running || "–";
+  byId("chargerFwUploaded").textContent = d.uploaded ? d.uploaded.version : "nichts";
+}
+
+async function uploadChargerFw() {
+  const input = byId("chargerFwFile"), msg = byId("chargerFwMsg");
+  if (!input.files.length) { alert("Bitte zuerst die firmware.bin wählen."); return; }
+  const form = new FormData();
+  form.append("file", input.files[0]);
+  msg.className = "small text-muted"; msg.textContent = "Lade hoch …";
+  try {
+    const r = await fetch("/api/charger-firmware", { method: "POST", body: form });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP " + r.status));
+    msg.className = "small text-success";
+    msg.textContent = `Version ${j.uploaded.version} bereitgestellt. Der Koffer holt sie beim nächsten Melden.`;
+    input.value = "";
+    await refreshChargerFw();
+  } catch (e) {
+    msg.className = "small text-danger"; msg.textContent = "Fehlgeschlagen: " + e.message;
+  }
+}
+
+// -----------------------------
 // Archiv
 // -----------------------------
 async function refreshArchive() {
@@ -1651,8 +1679,14 @@ async function init() {
     });
     refreshWifi().catch(() => {});
     refreshAccount().catch(() => {});
+    refreshChargerFw().catch(() => {});
   });
   byId("btnWifiSave").addEventListener("click", saveWifi);
+  byId("btnChargerFwUpload").addEventListener("click", uploadChargerFw);
+  byId("btnChargerFwClear").addEventListener("click", async () => {
+    await fetch("/api/charger-firmware", { method: "DELETE" }).catch(() => {});
+    refreshChargerFw().catch(() => {});
+  });
   byId("btnWifiForce").addEventListener("click", forceWifi);
   byId("btnAccountSave").addEventListener("click", saveAccount);
   byId("btnLogout").addEventListener("click", logout);
